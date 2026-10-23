@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Minimalist Pure Black Squircle Background -->
+  <rect x="16" y="16" width="480" height="480" rx="112" ry="112" fill="#0A0A0A" stroke="#FFFFFF" stroke-width="12"/>
+  
+  <!-- Subtle Inner Frame -->
+  <rect x="44" y="44" width="424" height="424" rx="88" ry="88" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3"/>
+
+  <!-- Bold Minimalist Geometric "MAI" Typography in Pure White -->
+  <g fill="#FFFFFF">
+    <!-- Letter M -->
+    <path d="M 86 336 L 86 176 L 126 176 L 164 264 L 202 176 L 242 176 L 242 336 L 206 336 L 206 234 L 174 308 L 154 308 L 122 234 L 122 336 Z" />
+    <!-- Letter A -->
+    <path d="M 314 176 L 354 176 L 402 336 L 364 336 L 354 300 L 314 300 L 304 336 L 266 336 Z M 322 270 L 346 270 L 334 222 Z" />
+    <!-- Letter I -->
+    <rect x="414" y="176" width="38" height="160" rx="4" />
+  </g>
+
+  <!-- Minimalist Underline Accent Bar -->
+  <rect x="176" y="368" width="160" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.85" />
+</svg>

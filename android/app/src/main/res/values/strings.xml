@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">mAI</string>
+    <string name="new_chat">New chat</string>
+    <string name="input_placeholder">Message mAI...</string>
+    <string name="settings_title">Settings</string>
+</resources>

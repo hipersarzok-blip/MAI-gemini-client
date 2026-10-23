@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Full Bleed Maskable Pure Black Background -->
+  <rect width="512" height="512" fill="#0A0A0A"/>
+  
+  <!-- Safe-zone Border Ring -->
+  <rect x="56" y="56" width="400" height="400" rx="88" ry="88" fill="#0A0A0A" stroke="#FFFFFF" stroke-width="10"/>
+
+  <!-- Bold Minimalist Geometric "MAI" Typography in Pure White -->
+  <g fill="#FFFFFF">
+    <!-- Letter M -->
+    <path d="M 104 326 L 104 186 L 138 186 L 172 264 L 206 186 L 240 186 L 240 326 L 208 326 L 208 238 L 180 302 L 164 302 L 136 238 L 136 326 Z" />
+    <!-- Letter A -->
+    <path d="M 304 186 L 340 186 L 382 326 L 348 326 L 340 294 L 304 294 L 296 326 L 262 326 Z M 311 268 L 333 268 L 322 226 Z" />
+    <!-- Letter I -->
+    <rect x="394" y="186" width="34" height="140" rx="4" />
+  </g>
+
+  <!-- Minimalist Underline Accent Bar -->
+  <rect x="186" y="354" width="140" height="7" rx="3.5" fill="#FFFFFF" fill-opacity="0.85" />
+</svg>

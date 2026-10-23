@@ -1,0 +1,174 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprint: Conversation
+    function isValidConversation(data) {
+      return data.keys().hasAll([
+        'id',
+        'userId',
+        'title',
+        'directive',
+        'directiveMode',
+        'assistantCategory',
+        'clientCreatedAt',
+        'clientUpdatedAt',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'userId',
+        'title',
+        'directive',
+        'directiveMode',
+        'assistantCategory',
+        'roleplayProfile',
+        'clientCreatedAt',
+        'clientUpdatedAt',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      isValidId(data.id) &&
+      isValidId(data.userId) &&
+      data.userId == request.auth.uid &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 500 &&
+      data.directive is string && data.directive.size() <= 50000 &&
+      data.directiveMode is string && data.directiveMode.size() <= 32 &&
+      (data.directiveMode == 'roleplay' || data.directiveMode == 'assistant' || data.directiveMode == 'other') &&
+      data.assistantCategory is string && data.assistantCategory.size() >= 1 && data.assistantCategory.size() <= 64 &&
+      (!('roleplayProfile' in data) || data.roleplayProfile == null || (data.roleplayProfile is map && data.roleplayProfile.keys().size() <= 20)) &&
+      data.clientCreatedAt is number &&
+      data.clientUpdatedAt is number &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: Message
+    function isValidMessage(data) {
+      return data.keys().hasAll([
+        'id',
+        'conversationId',
+        'userId',
+        'role',
+        'text',
+        'timestamp',
+        'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'conversationId',
+        'userId',
+        'role',
+        'text',
+        'timestamp',
+        'createdAt',
+        'sources',
+        'searchQueries'
+      ]) &&
+      isValidId(data.id) &&
+      isValidId(data.conversationId) &&
+      isValidId(data.userId) &&
+      data.userId == request.auth.uid &&
+      data.role is string && data.role.size() <= 16 && (data.role == 'user' || data.role == 'model') &&
+      data.text is string && data.text.size() >= 1 && data.text.size() <= 100000 &&
+      data.timestamp is number &&
+      data.createdAt is timestamp &&
+      (!('sources' in data) || data.sources == null || (data.sources is list && data.sources.size() <= 30 && (data.sources.size() == 0 || data.sources[0] is map))) &&
+      (!('searchQueries' in data) || data.searchQueries == null || (data.searchQueries is list && data.searchQueries.size() <= 20 && (data.searchQueries.size() == 0 || (data.searchQueries[0] is string && data.searchQueries[0].size() <= 500))));
+    }
+
+    // Collection: /conversations/{conversationId}
+    match /conversations/{conversationId} {
+      allow get: if isVerified() && isValidId(conversationId) && (resource == null || existing().userId == request.auth.uid);
+      allow list: if isVerified() && existing().userId == request.auth.uid;
+
+      allow create: if isVerified() &&
+        isValidId(conversationId) &&
+        isValidConversation(incoming()) &&
+        incoming().id == conversationId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerified() &&
+        isValidId(conversationId) &&
+        isValidConversation(incoming()) &&
+        existing().userId == request.auth.uid &&
+        incoming().userId == existing().userId &&
+        incoming().id == existing().id &&
+        incoming().clientCreatedAt == existing().clientCreatedAt &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title',
+            'directive',
+            'directiveMode',
+            'assistantCategory',
+            'roleplayProfile',
+            'clientUpdatedAt',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if isVerified() && isValidId(conversationId) && existing().userId == request.auth.uid;
+    }
+
+    // Collection: /messages/{messageId}
+    match /messages/{messageId} {
+      allow get: if isVerified() && isValidId(messageId) && (resource == null || existing().userId == request.auth.uid);
+      allow list: if isVerified() && existing().userId == request.auth.uid;
+
+      allow create: if isVerified() &&
+        isValidId(messageId) &&
+        isValidMessage(incoming()) &&
+        incoming().id == messageId &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/conversations/$(incoming().conversationId)) &&
+        get(/databases/$(database)/documents/conversations/$(incoming().conversationId)).data.userId == request.auth.uid;
+
+      allow update: if isVerified() &&
+        isValidId(messageId) &&
+        isValidMessage(incoming()) &&
+        existing().userId == request.auth.uid &&
+        incoming().userId == existing().userId &&
+        incoming().id == existing().id &&
+        incoming().conversationId == existing().conversationId &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'text',
+            'sources',
+            'searchQueries'
+          ])
+        );
+
+      allow delete: if isVerified() && isValidId(messageId) && existing().userId == request.auth.uid;
+    }
+  }
+}

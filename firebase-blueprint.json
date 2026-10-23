@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A user chat conversation including active system directive, mode, assistant category, and roleplay character profile.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique conversation ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Display title of the conversation",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "directive": {
+          "type": "string",
+          "description": "Custom or compiled system directive text",
+          "maxLength": 50000
+        },
+        "directiveMode": {
+          "type": "string",
+          "description": "Active directive mode",
+          "enum": ["roleplay", "assistant", "other"],
+          "maxLength": 32
+        },
+        "assistantCategory": {
+          "type": "string",
+          "description": "Selected assistant framework category ID",
+          "maxLength": 64
+        },
+        "roleplayProfile": {
+          "type": "object",
+          "description": "Structured C.ai roleplay character profile map"
+        },
+        "clientCreatedAt": {
+          "type": "number",
+          "description": "Client-side creation epoch timestamp in ms"
+        },
+        "clientUpdatedAt": {
+          "type": "number",
+          "description": "Client-side update epoch timestamp in ms"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "directive",
+        "directiveMode",
+        "assistantCategory",
+        "clientCreatedAt",
+        "clientUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A chat message belonging to a specific user conversation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Parent conversation ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "description": "Sender role",
+          "enum": ["user", "model"],
+          "maxLength": 16
+        },
+        "text": {
+          "type": "string",
+          "description": "Message markdown content",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Client message timestamp in ms"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "conversationId",
+        "userId",
+        "role",
+        "text",
+        "timestamp",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/conversations/{conversationId}": {
+      "schema": {
+        "$ref": "#/entities/Conversation"
+      },
+      "description": "Stores user conversations, system directives, and roleplay character profiles."
+    },
+    "/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/Message"
+      },
+      "description": "Stores individual chat messages linked to conversations."
+    }
+  }
+}

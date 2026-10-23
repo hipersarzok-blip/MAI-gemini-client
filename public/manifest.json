@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "mAI - Gemini Chat",
+  "short_name": "mAI",
+  "description": "Gemini destekli minimalist ve modern yapay zeka sohbet istemcisi.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080809",
+  "theme_color": "#080809",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
