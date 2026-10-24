@@ -6,14 +6,12 @@ import {
   X,
   Check,
   Pencil,
-  Cloud,
   LogIn,
   LogOut
 } from 'lucide-react';
 import { Conversation } from '../types.ts';
 import { ASSISTANT_FRAMEWORKS, ASSISTANT_CATEGORY_TITLES_EN } from '../utils/directiveFrameworks.ts';
 import { User } from '../firebase.ts';
-import { MaiBrandIcon } from './MaiBrandIcon.tsx';
 
 interface ConversationDrawerProps {
   isOpen: boolean;
@@ -44,9 +42,8 @@ export const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
   onDeleteConversation,
   onRenameConversation,
   onClearAllConversations,
-  uiLanguage = 'tr',
+  uiLanguage = 'en',
   user,
-  isSyncingCloud = false,
   onSignInGoogle,
   onSignOutGoogle
 }) => {
@@ -99,14 +96,11 @@ export const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
             : 'bg-[#f0f4f9] text-[#1f1f1f] border-r border-[#dfe3e8]'
         }`}
       >
-        {/* Header with B&W MAI Brand Icon */}
+        {/* Header */}
         <div className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <MaiBrandIcon size={26} invert={!isDarkMode} />
-            <span className="font-semibold text-base tracking-tight">
-              {isEn ? 'Conversations' : 'Sohbetler'}
-            </span>
-          </div>
+          <span className="font-semibold text-base tracking-tight">
+            {isEn ? 'Conversations' : 'Sohbetler'}
+          </span>
           <button
             onClick={onClose}
             className={`p-1.5 rounded-full transition-colors ${
@@ -118,54 +112,44 @@ export const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
           </button>
         </div>
 
-        {/* Google Account & Cloud Backup Banner */}
+        {/* Google Account Card */}
         <div className="px-4 pb-3">
           {user ? (
             <div
-              className={`p-3 rounded-2xl border flex flex-col gap-2 ${
+              className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
                 isDarkMode
                   ? 'bg-[#18191a] border-[#2f3032]'
                   : 'bg-white border-[#dfe3e8]'
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt={user.displayName || (isEn ? 'Profile' : 'Profil')}
-                      className="w-8 h-8 rounded-full object-cover shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#4285f4] text-white flex items-center justify-center text-xs font-bold shrink-0">
-                      {(user.displayName || user.email || 'G')[0].toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="font-semibold text-xs truncate">
-                      {user.displayName || (isEn ? 'Google Account' : 'Google Hesabı')}
-                    </div>
-                    <div className="text-[10px] opacity-65 truncate">{user.email}</div>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || (isEn ? 'Profile' : 'Profil')}
+                    className="w-8 h-8 rounded-full object-cover shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-[#4285f4] text-white flex items-center justify-center text-xs font-bold shrink-0">
+                    {(user.displayName || user.email || 'G')[0].toUpperCase()}
                   </div>
+                )}
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs truncate">
+                    {user.displayName || (isEn ? 'Google Account' : 'Google Hesabı')}
+                  </div>
+                  <div className="text-[10px] opacity-65 truncate">{user.email}</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={onSignOutGoogle}
-                  className="p-1.5 rounded-lg text-[#ea4335] hover:bg-[#ea4335]/10 transition-colors shrink-0 cursor-pointer"
-                  title={isEn ? 'Sign Out' : 'Çıkış Yap'}
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] font-medium text-[#34a853]">
-                <Cloud className={`w-3 h-3 ${isSyncingCloud ? 'animate-pulse text-[#fbbc04]' : ''}`} />
-                <span>
-                  {isEn
-                    ? 'Gmail cloud backup active — chats synced'
-                    : 'Gmail bulut yedekleme aktif — sohbetleriniz güvende'}
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={onSignOutGoogle}
+                className="p-1.5 rounded-lg text-[#ea4335] hover:bg-[#ea4335]/10 transition-colors shrink-0 cursor-pointer"
+                title={isEn ? 'Sign Out' : 'Çıkış Yap'}
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           ) : (
             <button
@@ -174,11 +158,7 @@ export const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
               className="w-full flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-2xl text-xs font-semibold bg-[#4285f4] hover:bg-[#1a73e8] text-white shadow-xs transition-all active:scale-[0.98] cursor-pointer"
             >
               <LogIn className="w-4 h-4 shrink-0" />
-              <span>
-                {isEn
-                  ? 'Sign In with Google (Backup Chats)'
-                  : 'Google ile Giriş Yap (Sohbetleri Yedekle)'}
-              </span>
+              <span>{isEn ? 'Sign In with Google' : 'Google ile Giriş Yap'}</span>
             </button>
           )}
         </div>
@@ -223,9 +203,9 @@ export const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
                 const isEditing = editingConvId === conv.id;
 
                 let modeBadge = '';
-                if (conv.directiveMode === 'roleplay' || conv.roleplayProfile?.name) {
+                if (conv.roleplayProfile?.name?.trim() || (conv.directiveMode === 'roleplay' && conv.directive?.trim())) {
                   modeBadge = `${conv.roleplayProfile?.avatarEmoji || '🎭'} ${
-                    conv.roleplayProfile?.name || (isEn ? 'Roleplay' : 'Rol Yapma')
+                    conv.roleplayProfile?.name || (isEn ? 'Roleplay Engine' : 'Rol Yapma Motoru')
                   }`;
                 } else if (conv.directiveMode === 'assistant' && conv.assistantCategory) {
                   modeBadge = isEn
@@ -311,7 +291,6 @@ export const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
                           </div>
                         </div>
 
-                        {/* Actions on Hover or Confirming */}
                         <div className="shrink-0 flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                           {isConfirming ? (
                             <div className="flex items-center gap-1">

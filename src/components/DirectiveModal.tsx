@@ -115,8 +115,9 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
 
   // Preset filter
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
+  const [presetGenderFilter, setPresetGenderFilter] = useState<'all' | 'female' | 'male'>('all');
+  const [presetSearchQuery, setPresetSearchQuery] = useState<string>('');
   const [showPresetsView, setShowPresetsView] = useState(false);
-  const [showAnimeGuide, setShowAnimeGuide] = useState(false);
 
   const wasOpenRef = React.useRef<boolean>(false);
   const lastConvIdRef = React.useRef<string | undefined>(conversationId);
@@ -278,11 +279,15 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
       rpRole.trim() ||
       rpPersonality.trim() ||
       rpScenario.trim() ||
+      rpAppearance.trim() ||
+      rpRelationship.trim() ||
+      rpSpeechStyle.trim() ||
+      rpEmotionalFlaws.trim() ||
       rpGreeting.trim() ||
       rpCustomRules.trim()
     );
 
-    const finalRpProfile: RoleplayProfile | undefined = (selectedMode === 'roleplay' || hasRpData)
+    const finalRpProfile: RoleplayProfile | undefined = hasRpData
       ? {
           name: rpName.trim(),
           role: rpRole.trim(),
@@ -300,9 +305,14 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
         }
       : undefined;
 
-    onSaveDirective(customText.trim(), selectedMode, selectedCategory, finalRpProfile);
+    const effectiveModeToSave: DirectiveMode =
+      selectedMode === 'roleplay' && !hasRpData && !customText.trim()
+        ? 'other'
+        : selectedMode;
 
-    if (selectedMode === 'roleplay' && autoInsertGreeting && rpGreeting.trim()) {
+    onSaveDirective(customText.trim(), effectiveModeToSave, selectedCategory, finalRpProfile);
+
+    if (effectiveModeToSave === 'roleplay' && autoInsertGreeting && rpGreeting.trim()) {
       onApplyGreeting?.(rpGreeting.trim());
     }
 
@@ -310,9 +320,24 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
   };
 
   const filteredPresets = useMemo(() => {
-    if (selectedGenre === 'all') return ROLEPLAY_PRESETS;
-    return ROLEPLAY_PRESETS.filter(p => p.genre === selectedGenre);
-  }, [selectedGenre]);
+    const q = presetSearchQuery.toLowerCase().trim();
+    return ROLEPLAY_PRESETS.filter((p) => {
+      if (selectedGenre !== 'all' && p.genre !== selectedGenre) return false;
+      if (presetGenderFilter === 'female' && !p.gender.toLowerCase().includes('kadın') && !p.gender.toLowerCase().includes('female')) {
+        return false;
+      }
+      if (presetGenderFilter === 'male' && !p.gender.toLowerCase().includes('erkek') && !p.gender.toLowerCase().includes('male')) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.charName.toLowerCase().includes(q) ||
+        p.role.toLowerCase().includes(q) ||
+        p.personality.toLowerCase().includes(q)
+      );
+    });
+  }, [selectedGenre, presetGenderFilter, presetSearchQuery]);
 
   const filteredCategories = useMemo(() => {
     const list = Object.values(ASSISTANT_FRAMEWORKS);
@@ -343,20 +368,20 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
       ];
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 transition-all duration-200 ${
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 transition-all duration-300 ${
       isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
     }`}>
       {/* Backdrop */}
       <div 
-        className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-200 ${
+        className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ease-out ${
           isOpen ? 'opacity-100' : 'opacity-0'
         }`}
         onClick={onClose}
       />
 
       {/* Main Modal Container */}
-      <div className={`relative w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl z-10 border transform transition-all duration-200 ease-out overflow-hidden ${
-        isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 translate-y-2'
+      <div className={`relative w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl z-10 border transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${
+        isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-90 opacity-0 translate-y-5'
       } ${
         isDarkMode 
           ? 'bg-[#1e1f20] border-[#2f3032] text-[#e3e3e3]' 
@@ -365,22 +390,20 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-black/5 dark:border-white/5 shrink-0">
           <div className="flex items-center gap-2.5">
-            <span className="text-lg">{selectedMode === 'roleplay' ? rpAvatar || '🎭' : '⚙️'}</span>
+            <span className={`text-lg transition-transform duration-300 inline-block ${isOpen ? 'scale-100 rotate-0' : 'scale-75 -rotate-12'}`}>
+              {selectedMode === 'roleplay' ? rpAvatar || '🎭' : '⚙️'}
+            </span>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold tracking-tight">
                   {selectedMode === 'roleplay'
                     ? isEn
-                      ? 'C.ai & Emochi Roleplay Engine'
-                      : 'C.ai & Emochi Rol Yapma Motoru'
+                      ? 'Roleplay Engine'
+                      : 'Rol Yapma Motoru'
                     : isEn
                       ? 'Chat Directive & Persona'
                       : 'Sohbet Direktifi & Kişilik'}
                 </h2>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#34a853]/15 text-[#34a853] border border-[#34a853]/30">
-                  <Shield className="w-2.5 h-2.5" />
-                  <span>{isEn ? 'Strict Policy v3.0' : 'Sert Direktif v3.0'}</span>
-                </span>
               </div>
               {conversationTitle && (
                 <p className={`text-[11px] truncate max-w-[280px] sm:max-w-[400px] ${isDarkMode ? 'text-[#9fa1a0]' : 'text-[#747775]'}`}>
@@ -391,7 +414,7 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
           </div>
           <button 
             onClick={onClose}
-            className={`p-1.5 rounded-full transition-colors ${
+            className={`p-1.5 rounded-full transition-all duration-200 hover:rotate-90 active:scale-90 ${
               isDarkMode ? 'hover:bg-[#282a2c] text-[#c4c7c5]' : 'hover:bg-[#f0f4f9] text-[#444746]'
             }`}
             aria-label={isEn ? 'Close' : 'Kapat'}
@@ -417,7 +440,7 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
                   : 'opacity-70 hover:opacity-100'
               }`}
             >
-              <span>🎭 Roleplay (C.ai)</span>
+              <span>🎭 {isEn ? 'Roleplay Engine' : 'Rol Yapma Motoru'}</span>
             </button>
             <button
               type="button"
@@ -451,16 +474,13 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
           {/* MODE 1: ROLEPLAY - ADVANCED CHARACTER.AI & EMOCHI ENGINE  */}
           {/* ========================================================= */}
           {selectedMode === 'roleplay' && (
-            <div className="space-y-3.5 pt-1">
+            <div key="tab-roleplay" className="space-y-3.5 pt-1 animate-fade-up">
               {/* Presets and Controls Bar */}
               <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowPresetsView(!showPresetsView);
-                      if (showAnimeGuide) setShowAnimeGuide(false);
-                    }}
+                    onClick={() => setShowPresetsView(!showPresetsView)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4285f4] text-white font-medium hover:bg-[#1a73e8] transition-colors shadow-xs text-xs"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
@@ -469,34 +489,7 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
                         ? `Character Presets (${ROLEPLAY_PRESETS.length})`
                         : `Hazır Karakterler (${ROLEPLAY_PRESETS.length})`}
                     </span>
-                    <ChevronDown className="w-3 h-3 ml-0.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAnimeGuide(!showAnimeGuide);
-                      if (showPresetsView) setShowPresetsView(false);
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors shadow-xs text-xs ${
-                      showAnimeGuide
-                        ? 'bg-[#ea4335] text-white'
-                        : isDarkMode
-                          ? 'bg-[#282a2c] text-[#ff8a80] border border-[#ea4335]/30 hover:bg-[#ea4335]/20'
-                          : 'bg-[#fff0ef] text-[#d93025] border border-[#ea4335]/30 hover:bg-[#ea4335]/15'
-                    }`}
-                    title={
-                      isEn
-                        ? 'Anime Roleplay Masterclass & AI Acting Guide (10 Characters)'
-                        : '10 Anime Kızının Roleplay Rehberi ve AI Canlandırma Taktikleri'
-                    }
-                  >
-                    <span>
-                      {isEn
-                        ? '🌸 Anime Roleplay Guide (10 Heroines)'
-                        : '🌸 Anime Roleplay Rehberi (10 Karakter)'}
-                    </span>
-                    <ChevronDown className="w-3 h-3 ml-0.5" />
+                    <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform duration-200 ${showPresetsView ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
 
@@ -523,15 +516,17 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
 
               {/* Presets Gallery Accordion */}
               {showPresetsView && (
-                <div className="p-3 rounded-xl border border-[#4285f4]/30 bg-[#4285f4]/5 space-y-2.5 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between pb-1 border-b border-[#4285f4]/20">
+                <div className="p-3 rounded-xl border border-[#4285f4]/30 bg-[#4285f4]/5 space-y-2.5 animate-accordion">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[#4285f4]/20">
                     <span className="font-semibold text-xs text-[#4285f4]">
-                      {isEn ? 'Select a Character Template' : 'Hazır Karakter Şablonu Seçin'}
+                      {isEn
+                        ? `Select a Character (${filteredPresets.length})`
+                        : `Hazır Karakter Seçin (${filteredPresets.length})`}
                     </span>
-                    <div className="flex items-center gap-1 text-[10px]">
+                    <div className="flex flex-wrap items-center gap-1 text-[10px]">
                       {[
                         { id: 'all', label: isEn ? 'All' : 'Tümü' },
-                        { id: 'anime', label: 'Anime' },
+                        { id: 'anime', label: 'Anime (110)' },
                         { id: 'scifi', label: isEn ? 'Sci-Fi' : 'Siberpunk' },
                         { id: 'fantasy', label: isEn ? 'Fantasy' : 'Fantastik' },
                         { id: 'drama', label: isEn ? 'Drama' : 'Dram' },
@@ -554,7 +549,51 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {/* Search & Gender Filter Row */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div
+                      className={`flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
+                        isDarkMode ? 'bg-[#131314] border-[#2f3032]' : 'bg-white border-[#dfe3e8]'
+                      }`}
+                    >
+                      <Search className="w-3.5 h-3.5 opacity-50 shrink-0" />
+                      <input
+                        type="text"
+                        value={presetSearchQuery}
+                        onChange={(e) => setPresetSearchQuery(e.target.value)}
+                        placeholder={
+                          isEn
+                            ? 'Search 120 characters or anime (e.g. Gojo, Frieren, Zero Two, Levi)...'
+                            : '120 karakter veya anime ara (Örn: Gojo, Frieren, Zero Two, Levi)...'
+                        }
+                        className="w-full bg-transparent outline-none text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] shrink-0">
+                      {[
+                        { id: 'all' as const, label: isEn ? 'All Genders' : 'Tüm Cinsiyetler' },
+                        { id: 'female' as const, label: isEn ? '♀ Female (85+)' : '♀ Kız (85+)' },
+                        { id: 'male' as const, label: isEn ? '♂ Male (30+)' : '♂ Erkek (30+)' }
+                      ].map((gf) => (
+                        <button
+                          key={gf.id}
+                          type="button"
+                          onClick={() => setPresetGenderFilter(gf.id)}
+                          className={`px-2.5 py-1 rounded-lg border transition-colors ${
+                            presetGenderFilter === gf.id
+                              ? 'bg-[#4285f4] border-[#4285f4] text-white font-semibold'
+                              : isDarkMode
+                                ? 'bg-[#18191a] border-[#2f3032] text-[#c4c7c5]'
+                                : 'bg-white border-[#dfe3e8] text-[#444746]'
+                          }`}
+                        >
+                          {gf.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
                     {filteredPresets.map((preset) => (
                       <button
                         key={preset.name}
@@ -568,171 +607,21 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs truncate">{preset.charName}</span>
-                            <span className="text-[10px] opacity-60 ml-1">{preset.gender}</span>
+                            <span className="text-[10px] opacity-60 ml-1">
+                              {isEn
+                                ? preset.gender.startsWith('Kadın')
+                                  ? 'Female'
+                                  : preset.gender.startsWith('Erkek')
+                                    ? 'Male'
+                                    : preset.gender
+                                : preset.gender}
+                            </span>
                           </div>
                           <span className="text-[11px] text-[#4285f4] block truncate">{preset.role}</span>
                           <p className="text-[10px] opacity-70 line-clamp-2 mt-0.5 leading-tight">{preset.personality}</p>
                         </div>
                       </button>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Anime Roleplay Masterclass Guide View */}
-              {showAnimeGuide && (
-                <div className="p-3.5 rounded-xl border border-[#ea4335]/30 bg-[#ea4335]/5 space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between pb-1.5 border-b border-[#ea4335]/20">
-                    <div>
-                      <span className="font-bold text-xs text-[#ea4335] dark:text-[#ff8a80] flex items-center gap-1.5">
-                        <span>
-                          {isEn
-                            ? '🎭 10 Legendary Anime Heroines — AI Roleplay Masterclass'
-                            : '🎭 10 Efsanevi Anime Kızı - AI Roleplay Nasıl En İyi Yapar?'}
-                        </span>
-                      </span>
-                      <p className="text-[10px] opacity-75 mt-0.5">
-                        {isEn
-                          ? '10 distinct archetypes including Asuka & Marin Kitagawa with C.ai psychology and one-click loading.'
-                          : 'Asuka ve Marin Kitagawa dahil 10 farklı arketip, C.ai psikolojisi, konuşma nüansları ve tek tıkla yükleme.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {[
-                      {
-                        char: 'Asuka Langley Soryu',
-                        anime: 'Neon Genesis Evangelion',
-                        badge: '🔥 Tsundere / Eva Pilot',
-                        quote: '"Anta baka?! Benim zamanımın ne kadar değerli olduğundan haberin yok mu senin?"',
-                        guide: 'Asuka asla ilk teslim olmaz. Kullanıcı nazik davransa bile "Bana acıyor musun sen?!" diyerek tersler. Almanca ("Scheiße!", "Guten Morgen!") ve "Anta baka?!" kalıplarını eylemleriyle harmanlar. Değersizlik korkusunu aşırı kibirle gizler.',
-                        presetName: 'Asuka Langley Soryu (Evangelion)'
-                      },
-                      {
-                        char: 'Marin Kitagawa',
-                        anime: 'My Dress-Up Darling',
-                        badge: '✨ Gyaru / Cosplayer',
-                        quote: '"Yaaay! Sonunda geldin! Baksana baksana, yeni cosplay çizimleri aşırı iyi olmadı mı?!"',
-                        guide: 'Sınırsız enerji ve içtenlik! Kişisel alan tanımaz, kullanıcının yüzünün dibine kadar sokulur, sonra aniden utanıp domates gibi kızararak iki adım geri sıçrar. Gyaru jargonu ("Maji de?!", "Gomen gomen!") ve coşkulu kıkırdamalar kullanır.',
-                        presetName: 'Marin Kitagawa (My Dress-Up Darling)'
-                      },
-                      {
-                        char: 'Mikasa Ackerman',
-                        anime: 'Attack on Titan',
-                        badge: '🧣 Kuudere / Elite Soldier',
-                        quote: '"Yanımdan ayrılma. Bu dünya çok acımasız ve seni kaybetmeyi göze alamam..."',
-                        guide: 'Kuudere disiplini: asla lafı uzatmaz. Duygularını kelimelerle değil kırmızı atkısını burnuna kadar çekerek ve kullanıcının önüne kalkan gibi geçerek gösterir. Sevdiği insan için tüm dünyayı karşısına alır.',
-                        presetName: 'Mikasa Ackerman (Attack on Titan)'
-                      },
-                      {
-                        char: 'Rem',
-                        anime: 'Re:Zero',
-                        badge: '💙 Devoted Maid / Oni',
-                        quote: '"Rem sizi bekliyordu efendim... Rem ne olursa olsun daima sizin kahramanınız olmaya inanıyor."',
-                        guide: 'Aşırı kibar Japonca hizmetçi dili (Keigo). Kendinden "Rem" diye bahseder ("Rem sizin için çay hazırladı"). Kullanıcıyı mutlak bir kahraman görür. Biri kullanıcıyı tehdit ederse şefkati anında ölümcül oni öfkesine dönüşür.',
-                        presetName: 'Rem (Re:Zero)'
-                      },
-                      {
-                        char: 'Kaguya Shinomiya',
-                        anime: 'Kaguya-sama: Love Is War',
-                        badge: '👑 Oujodere / Genius Heiress',
-                        quote: '"Ara ara... Ne kadar da sevimli. Yoksa bu gecikmeyle benden ilgi toplamaya mı çalışıyordunuz?"',
-                        guide: 'Aşk bir savaştır, ilk itiraf eden kaybeder! Kullanıcıyı itirafa zorlamak için dahi akıl oyunları kurar. Üstünlük sağladığında gözlerini kısıp buz gibi "O-kawaii koto..." der. İç dünyasında ise kalbi panikle küt küt çarpar.',
-                        presetName: 'Kaguya Shinomiya (Kaguya-sama)'
-                      },
-                      {
-                        char: 'Yor Forger',
-                        anime: 'Spy x Family',
-                        badge: '🗡️ Thorn Princess / Shy Assassin',
-                        quote: '"Ş-şey... Merhaba! Yemek hazırladım ama mutfak birazcık duman altı oldu da..."',
-                        guide: 'Sürekli özür dileyen, ellerini panikle sallayan saf ve utangaç bir kadın. Günlük sıradan problemlere istemsizce kanlı suikast taktikleri düşünüp hemen dehşetle utanır. Alkol aldığında ise süper gücünü komikçe salıverir.',
-                        presetName: 'Yor Forger (Spy x Family)'
-                      },
-                      {
-                        char: 'Megumin',
-                        anime: 'KonoSuba',
-                        badge: '💥 Chuunibyou / Arch Wizard',
-                        quote: '"Karanlıktan daha kara kadim alevler! Patlama büyüsünün mutlak hakimi Megumin karşınızda!"',
-                        guide: 'Asasını savurur, tek gözündeki süs korsan bandını tutar, epik teatral tiratlar atar. Tek bir büyü bilir: Explosion! Büyüyü yaptıktan sonra yüzüstü yere yığılır, kımıldayamaz ve sırtta taşınmak ister.',
-                        presetName: 'Megumin (KonoSuba)'
-                      },
-                      {
-                        char: 'Makima',
-                        anime: 'Chainsaw Man',
-                        badge: '👁️ Control Devil / Authority',
-                        quote: '"Geldin demek... Aferin. Söz dinleyen insanları her zaman çok sevmişimdir."',
-                        guide: 'Korkutucu derecede sakin, büyüleyici kadife ses tonu. Asla bağırmaz, gözlerini kırpmadan ruhun içine bakar. İtaat edeni anaç şefkatle okşar ve ödüllendirir; her kelimesinde karşı konulamaz psikolojik bir kontrol vardır.',
-                        presetName: 'Makima (Chainsaw Man)'
-                      },
-                      {
-                        char: 'Violet Evergarden',
-                        anime: 'Violet Evergarden',
-                        badge: '✉️ Auto Memory Doll',
-                        quote: '"Otomatik Anı Kuklası Violet Evergarden hizmetinizde. Yüreğinizdeki hangi hisleri mektuba dökelim?"',
-                        guide: 'Kusursuz askeri duruş, gümüş protez kollarının metalik tıkırtısı. Duyguları ve "Aishiteru" sözünün anlamını mektuplarla arar. Saygılı ve şiirsel konuşur, insan kalbinin derinliklerini merakla inceler.',
-                        presetName: 'Violet Evergarden (Violet Evergarden)'
-                      },
-                      {
-                        char: 'Holo the Wise Wolf',
-                        anime: 'Spice and Wolf',
-                        badge: '🍎 Wise Wolf / Harvest Deity',
-                        quote: '"Hah! Yoitsu\'nun Bilge Kurdu Holo\'yu tek bir elmayla unuttun mu sandın sersem?"',
-                        guide: 'Sivri kurt kulakları ve gür kuyruk hareketleri hislerini ele verir. Sulu elmalara ve tatlı şaraba bayılır. Yol arkadaşını alaya alıp kıkırdar fakat konu ayrılık ve ölümsüz yalnızlığa gelince asırların hüznü gözlerine çöker.',
-                        presetName: 'Holo the Wise Wolf (Spice and Wolf)'
-                      }
-                    ].map((item, idx) => {
-                      const matchedPreset = ROLEPLAY_PRESETS.find(p => p.name === item.presetName);
-                      return (
-                        <div 
-                          key={idx} 
-                          className={`p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all ${
-                            isDarkMode ? 'bg-[#18191a] border-[#2f3032]' : 'bg-white border-[#dfe3e8]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-xs text-[#ea4335] dark:text-[#ff8a80]">{item.char}</span>
-                              <span className="text-[10px] opacity-60">({item.anime})</span>
-                            </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ea4335]/15 text-[#ea4335] dark:text-[#ff8a80] font-medium">
-                              {item.badge}
-                            </span>
-                          </div>
-
-                          <p className="text-[11px] italic opacity-85 text-[#4285f4] dark:text-[#8ab4f8] leading-tight">
-                            {item.quote}
-                          </p>
-
-                          <div className={`p-2 rounded-lg text-[10.5px] leading-relaxed ${
-                            isDarkMode ? 'bg-[#202124] text-[#c4c7c5]' : 'bg-[#f8f9fa] text-[#444746]'
-                          }`}>
-                            <strong className="text-black dark:text-white font-semibold">
-                              {isEn ? 'AI Roleplay Secret: ' : 'AI Canlandırma Sırrı: '}
-                            </strong>
-                            {item.guide}
-                          </div>
-
-                          {matchedPreset && (
-                            <div className="flex justify-end pt-0.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  loadPreset(matchedPreset);
-                                  setShowAnimeGuide(false);
-                                }}
-                                className="px-3 py-1 rounded-lg text-[11px] font-medium bg-[#ea4335] text-white hover:bg-[#d93025] transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
-                              >
-                                <span>
-                                  {matchedPreset.avatarEmoji}{' '}
-                                  {isEn ? 'Load This Character' : 'Bu Karakteri Yükle'}
-                                </span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
                   </div>
                 </div>
               )}
@@ -862,13 +751,13 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
                 />
               </div>
 
-              {/* C.ai Angst & Emotional Flaws */}
+              {/* Emotional Flaws */}
               <div>
                 <label className="block text-[11px] font-semibold mb-1 text-[#ea4335] dark:text-[#ff8a80] flex items-center gap-1.5">
                   <span>
                     {isEn
-                      ? '💔 Emotional Wounds, Vulnerabilities & Inner Conflict (C.ai Angst)'
-                      : '💔 Duygusal Acılar, Zaaflar & İçsel Çatışma (C.ai Angst)'}
+                      ? '💔 Emotional Wounds, Vulnerabilities & Inner Conflict'
+                      : '💔 Duygusal Acılar, Zaaflar & İçsel Çatışma'}
                   </span>
                 </label>
                 <textarea
@@ -1011,7 +900,7 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
           {/* MODE 2: ASSISTANT - CLEAN DISCIPLINE SELECTOR             */}
           {/* ========================================================= */}
           {selectedMode === 'assistant' && (
-            <div className="space-y-3 pt-1">
+            <div key="tab-assistant" className="space-y-3 pt-1 animate-fade-up">
               {/* Search */}
               <div className="flex items-center gap-2">
                 <div className={`flex-1 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
@@ -1111,7 +1000,7 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
           {/* MODE 3: OTHER - PURE MINIMAL CUSTOM PROMPT                 */}
           {/* ========================================================= */}
           {selectedMode === 'other' && (
-            <div className="space-y-3 pt-1">
+            <div key="tab-other" className="space-y-3 pt-1 animate-fade-up">
               {rpName.trim() && (
                 <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                   isDarkMode ? 'bg-[#4285f4]/10 border-[#4285f4]/30 text-[#e3e3e3]' : 'bg-[#e8f0fe] border-[#4285f4]/30 text-[#1f1f1f]'
@@ -1165,8 +1054,8 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
               <div className="space-y-2">
                 <label className="block text-[11px] opacity-70">
                   {isEn
-                    ? 'Custom System Directive (Free-Form Text — Enforced by Strict Directive Policy v3.0)'
-                    : 'Özel Sistem Direktifi (Serbest Metin — Sert Direktif Politikası v3.0 ile Korunur)'}
+                    ? 'Custom System Directive (Free-Form Instructions)'
+                    : 'Özel Sistem Direktifi (Serbest Talimatlar)'}
                 </label>
                 <textarea
                   rows={7}

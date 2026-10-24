@@ -1,4 +1,4 @@
-import { Message, GroundingSource } from '../types.ts';
+import { Message } from '../types.ts';
 
 export async function checkServerKeyStatus(): Promise<boolean> {
   try {
@@ -28,12 +28,12 @@ export async function fetchModelInfo(): Promise<ModelInfo> {
     return await res.json();
   } catch {
     return {
-      defaultModel: 'gemini-3.8-flash',
-      activeModel: 'gemini-3.8-flash',
+      defaultModel: 'gemini-3.1-flash-lite',
+      activeModel: 'gemini-3.1-flash-lite',
       availableModels: [
-        { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Fast & Web Search)', label: 'Gemini 3.8 Flash' },
-        { id: 'gemini-flash-latest', name: 'Gemini Flash (Balanced)', label: 'Gemini Flash' },
-        { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', label: 'Flash-Lite' }
+        { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Default)', label: 'Gemini 3.1 Flash Lite' },
+        { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', label: 'Gemini 3.8 Flash' },
+        { id: 'gemini-flash-latest', name: 'Gemini Flash', label: 'Gemini Flash' }
       ]
     };
   }
@@ -41,13 +41,6 @@ export async function fetchModelInfo(): Promise<ModelInfo> {
 
 export interface StreamChunkData {
   text?: string;
-  sources?: GroundingSource[];
-  searchQueries?: string[];
-  searching?: boolean;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function* streamGeminiChat(
@@ -55,65 +48,27 @@ export async function* streamGeminiChat(
   prompt: string,
   history: Message[],
   directive: string,
-  model?: string,
-  webSearch: boolean = false,
+  model: string = 'gemini-3.1-flash-lite',
   signal?: AbortSignal,
-  uiLanguage: 'tr' | 'en' = 'tr'
+  uiLanguage: 'tr' | 'en' = 'en'
 ): AsyncGenerator<StreamChunkData, void, unknown> {
   const trimmedKey = apiKey?.trim() || '';
 
-  let response: Response | null = null;
-  let lastFetchError: Error | null = null;
-
-  // Resilient retry loop on 503 (Model Overloaded) or network congestion
-  for (let retry = 0; retry < 3; retry++) {
-    try {
-      response = await fetch('/api/chat', {
-        method: 'POST',
-        signal,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          apiKey: trimmedKey,
-          prompt,
-          history,
-          directive,
-          model,
-          webSearch,
-          uiLanguage
-        })
-      });
-
-      if (response.status === 503 || response.status === 429) {
-        if (retry < 2) {
-          await sleep(700 * (retry + 1) + Math.random() * 250);
-          continue;
-        }
-      }
-
-      break;
-    } catch (err: any) {
-      if (signal?.aborted) throw err;
-      lastFetchError = err;
-      if (retry < 2) {
-        await sleep(500 * (retry + 1));
-        continue;
-      }
-      throw err;
-    }
-  }
-
-  if (!response) {
-    throw (
-      lastFetchError ||
-      new Error(
-        uiLanguage === 'en'
-          ? 'Connection could not be established. Please try again.'
-          : 'Bağlantı kurulamadı. Lütfen tekrar deneyin.'
-      )
-    );
-  }
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      apiKey: trimmedKey,
+      prompt,
+      history,
+      directive,
+      model: model || 'gemini-3.1-flash-lite',
+      uiLanguage
+    })
+  });
 
   if (!response.ok) {
     const errorJson = await response.json().catch(() => null);
@@ -165,31 +120,8 @@ export async function* streamGeminiChat(
         throw new Error(parsed.error);
       }
 
-      const chunkData: StreamChunkData = {};
-      let hasData = false;
-
-      if (parsed.searching) {
-        chunkData.searching = true;
-        hasData = true;
-      }
-
       if (parsed.text) {
-        chunkData.text = parsed.text;
-        hasData = true;
-      }
-
-      if (parsed.sources && Array.isArray(parsed.sources)) {
-        chunkData.sources = parsed.sources;
-        hasData = true;
-      }
-
-      if (parsed.searchQueries && Array.isArray(parsed.searchQueries)) {
-        chunkData.searchQueries = parsed.searchQueries;
-        hasData = true;
-      }
-
-      if (hasData) {
-        yield chunkData;
+        yield { text: parsed.text };
       }
     }
   }

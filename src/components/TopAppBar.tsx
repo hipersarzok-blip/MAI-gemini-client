@@ -7,12 +7,10 @@ import {
   Pencil,
   Settings,
   Sliders,
-  Cloud,
   LogOut,
   LogIn
 } from 'lucide-react';
 import { User } from '../firebase.ts';
-import { MaiBrandIcon } from './MaiBrandIcon.tsx';
 
 interface TopAppBarProps {
   isDarkMode: boolean;
@@ -48,10 +46,9 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   currentModel,
   onSelectModel,
   availableModels,
-  uiLanguage = 'tr',
+  uiLanguage = 'en',
   user,
   isAuthLoading = false,
-  isSyncingCloud = false,
   onSignInGoogle,
   onSignOutGoogle
 }) => {
@@ -76,7 +73,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
     }
   }, [isEditingTitle]);
 
-  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -128,8 +124,8 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           : 'bg-[#ffffff]/95 border-[#e3e8ef] text-[#1f1f1f]'
       }`}
     >
-      {/* Top App Bar Left: Drawer Menu, MAI Monochrome Logo & Model Selector */}
-      <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+      {/* Top App Bar Left: Drawer Menu & Model Selector */}
+      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
         <button
           onClick={onOpenDrawer}
           className={`p-2 rounded-full transition-transform active:scale-95 duration-75 shrink-0 ${
@@ -143,14 +139,12 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Minimalist Black & White MAI Brand Icon */}
-        <div
+        <span
           onClick={onOpenDrawer}
-          className="flex items-center cursor-pointer rounded-lg hover:opacity-85 transition-opacity shrink-0"
-          title={isEn ? 'mAI Conversations' : 'mAI Sohbetler'}
+          className="text-base font-bold tracking-tight cursor-pointer select-none px-1"
         >
-          <MaiBrandIcon size={28} invert={!isDarkMode} />
-        </div>
+          mAI
+        </span>
 
         {/* Model Selector Dropdown Pill */}
         <div className="relative" ref={dropdownRef}>
@@ -163,7 +157,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
             }`}
             title={`${isEn ? 'Active Model' : 'Aktif Model'}: ${activeModelObj.name}`}
           >
-            <span className="truncate max-w-[95px] sm:max-w-[140px]">{activeModelObj.label}</span>
+            <span className="truncate max-w-[115px] sm:max-w-[160px]">{activeModelObj.label}</span>
             <ChevronDown
               className={`w-3.5 h-3.5 opacity-60 transition-transform duration-150 ${
                 isModelDropdownOpen ? 'rotate-180' : ''
@@ -173,7 +167,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 
           {isModelDropdownOpen && (
             <div
-              className={`absolute top-full left-0 mt-1.5 w-60 rounded-2xl shadow-xl border py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ${
+              className={`absolute top-full left-0 mt-1.5 w-60 rounded-2xl shadow-xl border py-1.5 z-50 animate-scale-in origin-top-left ${
                 isDarkMode
                   ? 'bg-[#1e1f20] border-[#2f3032] text-[#e3e3e3]'
                   : 'bg-white border-[#e3e8ef] text-[#1f1f1f]'
@@ -216,7 +210,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 
       {/* Top App Bar Right Actions: Chat Title, Quick Directive Edit, Google Account, & Settings */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {/* Active Title pill with inline rename support */}
         {localizedActiveTitle &&
           (isEditingTitle ? (
             <div className="hidden md:flex items-center gap-1 bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full">
@@ -262,7 +255,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
             </div>
           ))}
 
-        {/* Direct Quick-Access Directive / Roleplay Button */}
+        {/* Directive / Roleplay Button */}
         <button
           type="button"
           onClick={onOpenDirective}
@@ -273,11 +266,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 ? 'bg-[#1e1f20] hover:bg-[#282a2c] text-[#c4c7c5] border border-[#2f3032]'
                 : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#444746] border border-[#dfe3e8]'
           }`}
-          title={
-            isEn
-              ? 'Edit Directive & Roleplay Persona (Strict Policy v3.0)'
-              : 'Direktif ve Rol Yapma Karakterini Düzenle (Sert Direktif v3.0)'
-          }
+          title={isEn ? 'Edit Directive & Roleplay Persona' : 'Direktif ve Rol Yapma Karakterini Düzenle'}
         >
           <Sliders className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate max-w-[95px] sm:max-w-[140px]">
@@ -297,7 +286,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
-                  className={`flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full text-xs font-medium border transition-all active:scale-95 cursor-pointer ${
+                  className={`flex items-center p-1 rounded-full text-xs font-medium border transition-all active:scale-95 cursor-pointer ${
                     isDarkMode
                       ? 'bg-[#1e1f20] hover:bg-[#282a2c] border-[#2f3032] text-[#e3e3e3]'
                       : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] border-[#dfe3e8] text-[#1f1f1f]'
@@ -316,16 +305,11 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                       {(user.displayName || user.email || 'G')[0].toUpperCase()}
                     </div>
                   )}
-                  <Cloud
-                    className={`w-3.5 h-3.5 hidden sm:inline ${
-                      isSyncingCloud ? 'text-[#fbbc04] animate-pulse' : 'text-[#34a853]'
-                    }`}
-                  />
                 </button>
 
                 {isAccountMenuOpen && (
                   <div
-                    className={`absolute right-0 top-full mt-1.5 w-64 rounded-2xl shadow-xl border p-3 z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                    className={`absolute right-0 top-full mt-1.5 w-60 rounded-2xl shadow-xl border p-3 z-50 animate-scale-in origin-top-right ${
                       isDarkMode
                         ? 'bg-[#1e1f20] border-[#2f3032] text-[#e3e3e3]'
                         : 'bg-white border-[#e3e8ef] text-[#1f1f1f]'
@@ -352,22 +336,13 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                       </div>
                     </div>
 
-                    <div className="py-2 flex items-center gap-2 text-[11px] text-[#34a853]">
-                      <Cloud className="w-3.5 h-3.5 shrink-0" />
-                      <span>
-                        {isEn
-                          ? 'Chats auto-saved to your Google account'
-                          : 'Sohbetler Gmail hesabınıza otomatik kaydediliyor'}
-                      </span>
-                    </div>
-
                     <button
                       type="button"
                       onClick={() => {
                         setIsAccountMenuOpen(false);
                         onSignOutGoogle?.();
                       }}
-                      className={`w-full mt-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                      className={`w-full mt-2 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                         isDarkMode
                           ? 'bg-[#282a2c] hover:bg-[#ea4335]/20 text-[#ff8a80]'
                           : 'bg-[#f8f9fa] hover:bg-[#ea4335]/10 text-[#d93025]'
@@ -384,11 +359,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 type="button"
                 onClick={onSignInGoogle}
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-medium bg-[#4285f4] hover:bg-[#1a73e8] text-white shadow-xs transition-transform active:scale-95 cursor-pointer"
-                title={
-                  isEn
-                    ? 'Sign in with Google to sync your chats'
-                    : 'Sohbetlerinizi yedeklemek için Google ile giriş yapın'
-                }
+                title={isEn ? 'Sign in with Google' : 'Google ile giriş yapın'}
               >
                 <LogIn className="w-3.5 h-3.5 shrink-0" />
                 <span className="hidden sm:inline">
@@ -400,7 +371,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           </div>
         )}
 
-        {/* Unified Settings Button */}
+        {/* Settings Button */}
         <button
           onClick={onOpenSettings}
           className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-medium transition-transform duration-75 active:scale-95 ${

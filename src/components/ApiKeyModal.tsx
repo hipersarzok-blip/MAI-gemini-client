@@ -40,19 +40,19 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   };
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200 ${
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
       isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
     }`}>
       {/* Backdrop */}
       <div 
-        className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-200 ${
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
           isOpen ? 'opacity-100' : 'opacity-0'
         }`}
         onClick={onClose}
       />
 
-      <div className={`relative w-full max-w-md rounded-3xl p-6 shadow-2xl z-10 border transform transition-all duration-200 ease-out ${
-        isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 translate-y-2'
+      <div className={`relative w-full max-w-md rounded-3xl p-6 shadow-2xl z-10 border transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-90 opacity-0 translate-y-5'
       } ${
         isDarkMode 
           ? 'bg-[#1e1f20] border-[#2f3032] text-[#e3e3e3]' 

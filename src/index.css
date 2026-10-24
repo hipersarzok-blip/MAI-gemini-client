@@ -23,11 +23,75 @@
   }
 }
 
+/* Keyframes for fluid UI animations */
+@keyframes fadeSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes scaleSpringIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes accordionExpand {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+    transform-origin: top;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    transform-origin: top;
+  }
+}
+
+@keyframes softFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-fade-up {
+  animation: fadeSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scale-in {
+  animation: scaleSpringIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-accordion {
+  animation: accordionExpand 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-in {
+  animation: scaleSpringIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Fast, responsive active states for buttons */
 button, [role="button"], a {
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-duration: 180ms;
 }
 
 /* Custom scrollbar matching Google Gemini */

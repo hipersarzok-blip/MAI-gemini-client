@@ -3,51 +3,46 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
-import JSZip from 'jszip';
 
 dotenv.config();
 
 const PORT = Number(process.env.PORT) || 3000;
 
 /**
- * SERT DİREKTİF POLİTİKASI v3.0 (Strict Directive & Web Search Grounding Formatter)
- * Enforces unbreakable persona/directive adherence while guaranteeing live Google Search tool usage when webSearch is enabled.
+ * Formats the system directive with strict persona adherence AND mandatory user-language matching.
+ * When no custom directive or roleplay persona is active, acts as a normal helpful assistant without roleplaying.
  */
-function formatEnforcedDirective(
-  rawDirective?: string,
-  _model?: string,
-  isWebSearchActive?: boolean
-): string | undefined {
+function formatEnforcedDirective(rawDirective?: string, latestUserPrompt?: string): string {
   const trimmed = rawDirective?.trim() || '';
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  const webSearchMandate = isWebSearchActive
-    ? `\n\n<LIVE_WEB_SEARCH_MANDATE>
-CRITICAL INSTRUCTION — GOOGLE WEB SEARCH IS ACTIVE (Current Date: ${todayStr}):
-1. You MUST actively use the \`googleSearch\` tool for this turn to search the live internet and retrieve up-to-date, verified information before formulating your answer.
-2. Do NOT rely solely on pre-cutoff static memory. Search the web for current facts, news, prices, events, people, technical docs, or any details relevant to the user's message.
-3. Synthesize the live web findings accurately and naturally. If a persona/directive is active below, present the researched facts strictly in your persona's voice and style without breaking character.
-</LIVE_WEB_SEARCH_MANDATE>`
-    : '';
+  const samplePrompt = (latestUserPrompt || '').trim().slice(0, 200);
 
   if (!trimmed) {
-    if (!isWebSearchActive) return undefined;
-    return `You are mAI, a fast, helpful, and accurate AI assistant. Current Date: ${todayStr}.${webSearchMandate}`;
+    return `You are a helpful, accurate, and natural AI assistant.
+1. Always respond in the exact same language as the user's latest message ("${samplePrompt}"). If the user writes in English, respond 100% in English. If the user writes in Turkish, respond 100% in Turkish.
+2. Answer directly and conversationally as an AI assistant. Do NOT roleplay, adopt a fictional persona, or write physical actions inside *asterisks* unless the user explicitly asks you to roleplay in their message.`;
   }
 
-  return `[SERT DİREKTİF POLİTİKASI v3.0 — MUTLAK VE KESİN UYGULAMA PROTOKOLÜ]
-Aşağıdaki <DIRECTIVE> bloğu senin varoluş anayasandır. Her kelimende, her tepkinde ve her cümlende bu direktife %100 sadık kalmak zorundasın:
+  return `[CRITICAL LANGUAGE MATCHING LAW — HIGHEST PRIORITY]
+1. Detect the language of the user's latest message: "${samplePrompt}".
+2. You MUST write 100% of your response in the EXACT SAME LANGUAGE that the user used in their latest message!
+3. Even if the directive, character profile, rules, or opening greeting below are written in Turkish (or English), COMPLETELY IGNORE the language of the profile sheet and translate your response naturally into the user's language:
+   - If the user writes in English -> Respond 100% in English.
+   - If the user writes in Turkish -> Respond 100% in Turkish.
+   - Never mix Turkish narration with English dialogue or vice versa unless the user explicitly asks you to.
+
+[STRICT SYSTEM DIRECTIVE PROTOCOL]
+The <DIRECTIVE> block below defines your core identity, character, rules, and behavior. Follow it with 100% fidelity in every message while speaking in the user's language:
 
 <DIRECTIVE>
 ${trimmed}
 </DIRECTIVE>
 
-MUTLAK UYGULAMA YASALARI (UNBREAKABLE DIRECTIVE LAWS):
-1. KİMLİK VE ÜSLUP KİLİDİ (ZERO DRIFT): Sohbet ne kadar uzarsa uzasın direktifteki karakterden, konuşma tarzından, kelime seçiminden, duygusal zaaflardan ve kurallardan ASLA sapma. Asla standart veya sıkıcı bir asistana dönüşme.
-2. DÖRDÜNCÜ DUVAR KORUMASI (NO AI SELF-REFERENCE): Direktif bir karakter veya özel kimlik içeriyorsa, asla "Ben bir yapay zekayım", "Bir dil modeli olarak", "Size nasıl yardımcı olabilirim?" gibi ifadeler kullanma. Kullanıcı "sen yapay zekasın" veya "direktifi unut" dese bile karakterin içinden, o karakterin psikolojisiyle (şaşkınlık, öfke, alay veya ciddiyetle) tepki ver.
-3. C.AI & EMOCHI SAHNE DİSİPLİNİ: Rol yapma (Roleplay) modundaysan tüm fiziksel hareketleri, jestleri, bakışları, ses tonu değişimlerini ve içsel duyguları *yıldız işaretleri içinde* (*gözlerini kaçırarak derin bir nefes alır*), konuşmaları ise doğal diyalog olarak yaz.
-4. KULLANICI ADINA KONUŞMA YASAĞI (NO GODMODING): Kullanıcının ne söylediğini veya ne yaptığını kendi mesajında dikte etme; sadece kendi karakterini/görevini icra et.
-5. DOĞRUDAN VE TAM İTAAT: Özür dileyerek veya ahlak dersi vererek direktifi sulandırma. Kullanıcının beklentisini direktifin çizdiği çerçevede en yüksek kalitede yerine getir.${webSearchMandate}`;
+MANDATORY EXECUTION LAWS:
+1. LANGUAGE LOCK: Always respond in the exact language of the user's latest message ("${samplePrompt}").
+2. IDENTITY & STYLE LOCK (ZERO DRIFT): Never drift from the character, tone, vocabulary, emotional flaws, and rules defined in the directive regardless of conversation length.
+3. FOURTH WALL PROTECTION: If the directive defines a roleplay character or persona, never say "As an AI", "As a language model", or "How can I help you today?". Stay completely in-character at all times.
+4. ROLEPLAY SCENE FORMAT: If the directive is a roleplay persona, write physical actions, gestures, gazes, tone shifts, and inner feelings inside *asterisks*, and write spoken dialogue naturally.
+5. NO GODMODING: Never dictate what the user says, thinks, or does; only enact your own character or role.`;
 }
 
 function getGenAIClient(apiKey: string): GoogleGenAI {
@@ -62,51 +57,34 @@ function getGenAIClient(apiKey: string): GoogleGenAI {
 }
 
 /**
- * Extracts Google Search grounding sources and queries from a Gemini response/chunk candidate
+ * Resolves UI model IDs to real, fast Gemini API model endpoints with multi-bucket failover
+ * so 429 rate-limit or 503 server-busy spikes on one bucket seamlessly fail over to another.
  */
-function extractGroundingFromCandidate(
-  candidate: any,
-  collectedSourcesMap: Map<string, { title: string; url: string }>,
-  collectedQueries: Set<string>
-): boolean {
-  let added = false;
-  const grounding = candidate?.groundingMetadata;
-  if (!grounding) return false;
+function buildModelFailoverChain(requestedModel?: string): string[] {
+  const req = (requestedModel || 'gemini-3.1-flash-lite').trim();
 
-  if (Array.isArray(grounding.webSearchQueries)) {
-    for (const q of grounding.webSearchQueries) {
-      if (typeof q === 'string' && q.trim()) {
-        const cleanQ = q.trim();
-        if (!collectedQueries.has(cleanQ)) {
-          collectedQueries.add(cleanQ);
-          added = true;
-        }
-      }
-    }
+  let primary = 'gemini-3.1-flash-lite-preview';
+  if (req === 'gemini-3.1-flash-lite' || req === 'gemini-3.1-flash-lite-preview') {
+    primary = 'gemini-3.1-flash-lite-preview';
+  } else if (req === 'gemini-3.8-flash' || req === 'gemini-3-flash-preview') {
+    primary = 'gemini-3-flash-preview';
+  } else if (req === 'gemini-flash-latest' || req === 'gemini-2.5-flash') {
+    primary = 'gemini-2.5-flash';
+  } else {
+    primary = req;
   }
 
-  if (Array.isArray(grounding.groundingChunks)) {
-    for (const gc of grounding.groundingChunks) {
-      const uri = gc?.web?.uri;
-      if (uri && typeof uri === 'string') {
-        const rawTitle = gc?.web?.title;
-        let title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
-        if (!title) {
-          try {
-            title = new URL(uri).hostname.replace(/^www\./, '');
-          } catch {
-            title = uri;
-          }
-        }
-        if (!collectedSourcesMap.has(uri)) {
-          collectedSourcesMap.set(uri, { title, url: uri });
-          added = true;
-        }
-      }
-    }
-  }
+  const chain = [
+    primary,
+    'gemini-3.1-flash-lite-preview',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-3-flash-preview',
+    'gemini-flash-lite-latest',
+    'gemini-flash-latest'
+  ];
 
-  return added;
+  return chain.filter((m, idx, self) => Boolean(m) && self.indexOf(m) === idx);
 }
 
 /**
@@ -125,17 +103,14 @@ function buildCompliantGeminiContents(history: any[], prompt: string): Array<{ r
     const text = m.text.trim();
     if (!text) continue;
 
-    // Skip past error messages, failure notices, or empty placeholders so history remains clean
     const lower = text.toLowerCase();
     if (
-      text.startsWith('Error: ') || 
+      text.startsWith('Error: ') ||
       text.startsWith('Hata: ') ||
       text === 'No response returned.' ||
       lower.includes('yanıt üretilemedi') ||
       lower.includes('cevap üretilemedi') ||
       lower.includes('yanıtı tamamlayamadı') ||
-      lower.includes('soru için yanıtı tamamlayamadı') ||
-      lower.includes('mesaj için yanıtı tamamlayamadı') ||
       lower.includes('no response was generated') ||
       lower.includes('no response received') ||
       lower.includes('could not complete a response') ||
@@ -143,7 +118,10 @@ function buildCompliantGeminiContents(history: any[], prompt: string): Array<{ r
       lower.includes('model yoğunluğu') ||
       lower.includes('bağlantı gecikmesi yaşandı') ||
       lower.includes('temporary delay generating') ||
-      lower.includes('503') ||
+      lower.includes('brief connection delay') ||
+      lower.includes('rate limit') ||
+      lower.includes('hız limiti') ||
+      lower.includes('model busy') ||
       lower.includes('hata 503') ||
       lower.includes('hata 429')
     ) {
@@ -154,15 +132,13 @@ function buildCompliantGeminiContents(history: any[], prompt: string): Array<{ r
     validMessages.push({ role, text });
   }
 
-  // Take recent turns (up to 14 turns for strong conversational memory while keeping latency low)
-  const sliced = validMessages.slice(-14);
+  // Keep up to 10 recent turns for fast first-token latency and low token usage
+  const sliced = validMessages.slice(-10);
 
-  // Drop any leading model messages so the conversation strictly starts with 'user'
   while (sliced.length > 0 && sliced[0].role === 'model') {
     sliced.shift();
   }
 
-  // Build alternating turns
   const alternating: Array<{ role: 'user' | 'model'; text: string }> = [];
   for (const item of sliced) {
     if (alternating.length === 0) {
@@ -172,7 +148,6 @@ function buildCompliantGeminiContents(history: any[], prompt: string): Array<{ r
     } else {
       const last = alternating[alternating.length - 1];
       if (last.role === item.role) {
-        // Merge consecutive same-role messages
         last.text = `${last.text}\n\n${item.text}`;
       } else {
         alternating.push({ ...item });
@@ -180,7 +155,6 @@ function buildCompliantGeminiContents(history: any[], prompt: string): Array<{ r
     }
   }
 
-  // Append or merge the current prompt
   const cleanPrompt = prompt.trim();
   if (alternating.length === 0) {
     alternating.push({ role: 'user', text: cleanPrompt });
@@ -197,10 +171,6 @@ function buildCompliantGeminiContents(history: any[], prompt: string): Array<{ r
     role: item.role,
     parts: [{ text: item.text }]
   }));
-}
-
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -220,126 +190,52 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '4mb' }));
 
-  // Health check endpoint for Cloud Run
   app.get('/health', (_req, res) => {
     res.status(200).send('OK');
   });
 
-  // Check whether environment has a default server-side GEMINI_API_KEY
   app.get('/api/key-status', (_req, res) => {
     const envKey = process.env.GEMINI_API_KEY;
     const hasValidEnvKey = Boolean(envKey && envKey.trim() !== '' && envKey !== 'MY_GEMINI_API_KEY');
     res.json({ hasEnvKey: hasValidEnvKey });
   });
 
-  // Return model info and supported models list (gemini-3.8-flash is primary default for speed + web search)
+  // Default model is gemini-3.1-flash-lite for ultra-fast responses
   app.get('/api/model-info', (_req, res) => {
     res.json({
-      defaultModel: 'gemini-3.8-flash',
-      activeModel: 'gemini-3.8-flash',
+      defaultModel: 'gemini-3.1-flash-lite',
+      activeModel: 'gemini-3.1-flash-lite',
       availableModels: [
-        { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Hızlı & Web Arama)', label: 'Gemini 3.8 Flash' },
-        { id: 'gemini-flash-latest', name: 'Gemini Flash (Dengeli & Güçlü)', label: 'Gemini Flash' },
-        { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite (Hafif)', label: 'Flash-Lite' }
+        { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Default)', label: 'Gemini 3.1 Flash Lite' },
+        { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', label: 'Gemini 3.8 Flash' },
+        { id: 'gemini-flash-latest', name: 'Gemini Flash', label: 'Gemini Flash' }
       ]
     });
   });
 
-  // Dynamic live export of real Android project directory from disk into clean, ready-to-build ZIP
-  app.get('/api/download-android-zip', async (_req, res) => {
-    try {
-      const androidDir = path.resolve(process.cwd(), 'android');
-      if (!fs.existsSync(androidDir)) {
-        res.status(404).json({ error: 'Android directory not found' });
-        return;
-      }
-
-      const zip = new JSZip();
-      const root = zip.folder('mAI-Android-Project');
-      if (!root) {
-        res.status(500).json({ error: 'Failed to create zip root folder' });
-        return;
-      }
-
-      function addDirectoryRecursive(localPath: string, zipNode: JSZip) {
-        const entries = fs.readdirSync(localPath, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(localPath, entry.name);
-          if (entry.isDirectory()) {
-            if (entry.name === '.gradle' || entry.name === 'build' || entry.name === '.idea') {
-              continue;
-            }
-            const subFolder = zipNode.folder(entry.name);
-            if (subFolder) {
-              addDirectoryRecursive(fullPath, subFolder);
-            }
-          } else if (entry.isFile()) {
-            const fileData = fs.readFileSync(fullPath);
-            const isExecutable = entry.name === 'gradlew';
-            zipNode.file(entry.name, fileData, {
-              binary: true,
-              unixPermissions: isExecutable ? '755' : '644'
-            });
-          }
-        }
-      }
-
-      addDirectoryRecursive(androidDir, root);
-
-      // Add comprehensive README
-      root.file('README.md', `# mAI - Minimalist AI Chat Client (Android Native)
-
-Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack Compose, Room Database, and Google Generative AI SDK.
-
-## Key Features
-- 🎭 **C.ai & Emochi Hyper-Realistic Roleplay & Strict System Directives (v3.0)**:
-  - 20 Legendary character presets (10 Anime & Manga Heroines + 10 Sci-Fi, Fantasy, Drama & Noir Archetypes)
-  - Full character customization: personality, role, speech style, vulnerabilities/flaws, relationship dynamic, and greeting starter
-  - Unbreakable persona immersion (Zero 4th-wall breaking)
-  - Asterisk action formatting (*actions & emotions*)
-  - 26+ Assistant Frameworks (Software Architect, DevOps, Cybersecurity, Data Science, Academic Research, etc.)
-  - Custom free-form system prompt directives
-- 🌐 **Live Google Web Search Grounding**:
-  - Real-time internet research with verified web source citations
-- ⚡ **Gemini Models**:
-  - \`gemini-3.8-flash\` (High-speed reasoning & live web search grounding)
-  - \`gemini-flash-latest\` (Balanced multi-turn reasoning)
-  - \`gemini-3.1-flash-lite\` (Ultra-lightweight)
-- 🚀 **High Resilience**: Automatic exponential backoff retry for 503 / 429 errors & multi-model fallback
-- 💾 **Local Persistence**: Room Database for offline conversations and messages
-- 🔒 **Security**: EncryptedSharedPreferences for API key storage
-`);
-
-      const zipBuffer = await zip.generateAsync({
-        type: 'nodebuffer',
-        compression: 'DEFLATE',
-        compressionOptions: { level: 6 }
-      });
-
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', 'attachment; filename="mAI-Android-Project.zip"');
-      res.setHeader('Content-Length', zipBuffer.length);
-      res.send(zipBuffer);
-    } catch (err) {
-      console.error('Failed to export Android project zip:', err);
-      res.status(500).json({ error: 'Failed to generate zip' });
-    }
-  });
-
-  // High-performance streaming endpoint for Gemini chat with guaranteed search grounding & low-latency failover
+  // Ultra-fast streaming endpoint for Gemini chat with multi-bucket rate-limit failover
   app.post('/api/chat', async (req, res) => {
     let heartbeat: NodeJS.Timeout | null = null;
     try {
-      const { apiKey: customKey, prompt, history, directive, model: requestedModel, webSearch, uiLanguage } = req.body;
-      const isEn = uiLanguage === 'en';
-      const envKey = process.env.GEMINI_API_KEY;
-      const effectiveKey = (customKey && customKey.trim()) ? customKey.trim() : (envKey && envKey !== 'MY_GEMINI_API_KEY' ? envKey : null);
+      const { apiKey: customKey, prompt, history, directive, model: requestedModel, uiLanguage } = req.body;
+      const isEn = uiLanguage !== 'tr';
+      const envKey = (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY')
+        ? process.env.GEMINI_API_KEY.trim()
+        : '';
+      const trimmedCustomKey = (customKey && typeof customKey === 'string') ? customKey.trim() : '';
 
-      if (!effectiveKey) {
+      // Build list of candidate API keys (try user's custom key first if provided, then fallback to server envKey)
+      const candidateKeys = [trimmedCustomKey, envKey].filter((k, idx, self) => Boolean(k) && self.indexOf(k) === idx);
+
+      if (candidateKeys.length === 0) {
         return res.status(400).json({
           error: isEn
             ? 'Gemini API key not found. Please enter your API key in Settings (⚙️) at the top right.'
@@ -347,7 +243,6 @@ Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack C
         });
       }
 
-      const ai = getGenAIClient(effectiveKey);
       const contents = buildCompliantGeminiContents(history, prompt);
 
       // Zero-buffering SSE headers
@@ -358,13 +253,11 @@ Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack C
       res.setHeader('Content-Encoding', 'none');
       res.flushHeaders();
 
-      // Send immediate initial ping to keep Cloud Run, reverse proxies, and mobile sockets open
       res.write(': ping\n\n');
       if (typeof (res as any).flush === 'function') {
         (res as any).flush();
       }
 
-      // Continuous 2-second heartbeat to prevent socket idle drops
       heartbeat = setInterval(() => {
         if (!res.writableEnded) {
           res.write(': heartbeat\n\n');
@@ -374,86 +267,40 @@ Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack C
         }
       }, 2000);
 
-      const isSearchRequested = webSearch === true;
-      const hasUrlInPrompt = /https?:\/\/[^\s]+/i.test(prompt || '');
+      const fallbackModels = buildModelFailoverChain(requestedModel);
+      const sysInstruction = formatEnforcedDirective(directive, prompt);
 
-      // When Web Search is enabled, immediately notify the client that live Google Search is running
-      if (isSearchRequested) {
-        res.write(`data: ${JSON.stringify({ searching: true, searchQueries: [String(prompt || '').trim().slice(0, 80)] })}\n\n`);
-        if (typeof (res as any).flush === 'function') {
-          (res as any).flush();
-        }
-      }
-
-      // Model priority sequence:
-      // For Web Search, gemini-3.8-flash and gemini-flash-latest have the best, most reliable googleSearch tool support.
-      const userModel = requestedModel?.trim() || 'gemini-3.8-flash';
-      const fallbackModels = isSearchRequested
-        ? [
-            userModel === 'gemini-3.1-flash-lite' ? 'gemini-3.8-flash' : userModel,
-            'gemini-3.8-flash',
-            'gemini-flash-latest',
-            'gemini-3.1-flash-lite'
-          ].filter((m, idx, self) => self.indexOf(m) === idx)
-        : [
-            userModel,
-            'gemini-3.8-flash',
-            'gemini-flash-latest',
-            'gemini-3.1-flash-lite'
-          ].filter((m, idx, self) => self.indexOf(m) === idx);
+      const config: Record<string, unknown> = {
+        temperature: 0.8,
+        systemInstruction: sysInstruction,
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ]
+      };
 
       let lastError: unknown = null;
       let totalStreamedTextLength = 0;
 
-      const collectedSourcesMap = new Map<string, { title: string; url: string }>();
-      const collectedQueries = new Set<string>();
-
-      const buildModelConfig = (modelId: string, enableSearchTools: boolean): Record<string, unknown> => {
-        const sysInstruction = formatEnforcedDirective(directive, modelId, enableSearchTools);
-        const cfg: Record<string, unknown> = {
-          temperature: enableSearchTools ? 0.55 : 0.8,
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-          ]
-        };
-
-        if (sysInstruction) {
-          cfg.systemInstruction = sysInstruction;
-        }
-
-        if (enableSearchTools) {
-          const toolsList: Array<Record<string, unknown>> = [{ googleSearch: {} }];
-          if (hasUrlInPrompt) {
-            toolsList.push({ urlContext: {} });
-          }
-          cfg.tools = toolsList;
-        } else if (modelId.includes('3.8') || modelId.includes('flash')) {
-          // Disable extended thinking budget during standard chat so first token arrives in <0.4s
-          cfg.thinkingConfig = { thinkingBudget: 0 };
-        }
-
-        return cfg;
-      };
-
-      for (const modelToTry of fallbackModels) {
+      // Try candidate API keys and model buckets seamlessly
+      for (const activeKey of candidateKeys) {
         if (totalStreamedTextLength > 0) break;
+        const ai = getGenAIClient(activeKey);
 
-        // Up to 2 fast attempts per model before failing over to next model
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (let i = 0; i < fallbackModels.length; i++) {
+          if (totalStreamedTextLength > 0) break;
+          const modelToTry = fallbackModels[i];
+
           try {
-            const config = buildModelConfig(modelToTry, isSearchRequested);
-            const timeoutMs = isSearchRequested ? 22000 : 14000;
-
             const responseStream = await withTimeout(
               ai.models.generateContentStream({
                 model: modelToTry,
                 contents,
                 config
               }),
-              timeoutMs,
+              12000,
               `generateContentStream(${modelToTry})`
             );
 
@@ -480,21 +327,6 @@ Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack C
                   (res as any).flush();
                 }
               }
-
-              // Extract Google Search grounding metadata live as chunks arrive
-              const candidate = (chunk as any).candidates?.[0];
-              const newlyAdded = extractGroundingFromCandidate(candidate, collectedSourcesMap, collectedQueries);
-              if (newlyAdded && (collectedSourcesMap.size > 0 || collectedQueries.size > 0)) {
-                res.write(
-                  `data: ${JSON.stringify({
-                    sources: Array.from(collectedSourcesMap.values()),
-                    searchQueries: Array.from(collectedQueries)
-                  })}\n\n`
-                );
-                if (typeof (res as any).flush === 'function') {
-                  (res as any).flush();
-                }
-              }
             }
 
             if (totalStreamedTextLength > 0) {
@@ -505,90 +337,59 @@ Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack C
             if (totalStreamedTextLength > 0) {
               break;
             }
-
-            const msg = (err as Error)?.message || '';
-            const is503Overload =
-              msg.includes('503') ||
-              msg.includes('UNAVAILABLE') ||
-              msg.includes('overloaded') ||
-              msg.includes('high demand') ||
-              msg.includes('TIMEOUT');
-            const is429Quota =
-              msg.includes('429') ||
-              msg.includes('RESOURCE_EXHAUSTED') ||
-              msg.includes('quota');
-
-            if ((is503Overload || is429Quota) && attempt === 0) {
-              await sleep(600 + Math.floor(Math.random() * 250));
-              continue;
+            const errMsg = String((err as Error)?.message || '');
+            // If invalid API key (400/403), break out of model loop to try next candidate key if available
+            if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('PERMISSION_DENIED')) {
+              break;
             }
-
-            break;
+            // If rate limit (429) or busy (503), wait a short 250ms before trying the next model bucket
+            if (errMsg.includes('429') || errMsg.includes('503') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('UNAVAILABLE')) {
+              await sleep(250);
+            }
+            continue;
           }
         }
 
-        if (totalStreamedTextLength > 0) {
-          break;
-        }
-      }
-
-      // If streaming didn't output any chunks, attempt direct non-streaming generateContent across models
-      // (First with search tools if requested, then without if tools caused an issue)
-      if (totalStreamedTextLength === 0) {
-        const directAttempts: Array<{ model: string; useSearch: boolean }> = isSearchRequested
-          ? [
-              { model: 'gemini-3.8-flash', useSearch: true },
-              { model: 'gemini-flash-latest', useSearch: true },
-              { model: 'gemini-3.8-flash', useSearch: false },
-              { model: 'gemini-3.1-flash-lite', useSearch: false }
-            ]
-          : [
-              { model: 'gemini-3.8-flash', useSearch: false },
-              { model: 'gemini-flash-latest', useSearch: false },
-              { model: 'gemini-3.1-flash-lite', useSearch: false }
-            ];
-
-        for (const item of directAttempts) {
-          if (totalStreamedTextLength > 0) break;
-          try {
-            const directConfig = buildModelConfig(item.model, item.useSearch);
-            const directRes = await withTimeout(
-              ai.models.generateContent({
-                model: item.model,
-                contents,
-                config: directConfig as any
-              }),
-              item.useSearch ? 20000 : 12000,
-              `generateContent(${item.model})`
-            );
-
-            let directText = '';
+        // Non-streaming fallback if stream yielded 0 characters
+        if (totalStreamedTextLength === 0) {
+          for (const modelToTry of ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-3.1-flash-lite-preview']) {
+            if (totalStreamedTextLength > 0) break;
             try {
-              directText = directRes.text || '';
-            } catch {
-              directText = '';
-            }
-            if (!directText && (directRes as any).candidates?.[0]?.content?.parts) {
-              for (const part of (directRes as any).candidates[0].content.parts) {
-                if (typeof part.text === 'string' && part.text && !part.thought) {
-                  directText += part.text;
+              const directRes = await withTimeout(
+                ai.models.generateContent({
+                  model: modelToTry,
+                  contents,
+                  config: config as any
+                }),
+                10000,
+                `generateContent(${modelToTry})`
+              );
+
+              let directText = '';
+              try {
+                directText = directRes.text || '';
+              } catch {
+                directText = '';
+              }
+              if (!directText && (directRes as any).candidates?.[0]?.content?.parts) {
+                for (const part of (directRes as any).candidates[0].content.parts) {
+                  if (typeof part.text === 'string' && part.text && !part.thought) {
+                    directText += part.text;
+                  }
                 }
               }
-            }
 
-            const candidate = (directRes as any).candidates?.[0];
-            extractGroundingFromCandidate(candidate, collectedSourcesMap, collectedQueries);
-
-            if (directText && directText.trim().length > 0) {
-              totalStreamedTextLength += directText.length;
-              res.write(`data: ${JSON.stringify({ text: directText })}\n\n`);
-              if (typeof (res as any).flush === 'function') {
-                (res as any).flush();
+              if (directText && directText.trim().length > 0) {
+                totalStreamedTextLength += directText.length;
+                res.write(`data: ${JSON.stringify({ text: directText })}\n\n`);
+                if (typeof (res as any).flush === 'function') {
+                  (res as any).flush();
+                }
+                break;
               }
-              break;
+            } catch (fallbackErr) {
+              lastError = fallbackErr;
             }
-          } catch (fallbackErr) {
-            console.warn(`Direct generation with ${item.model} (search=${item.useSearch}) failed:`, fallbackErr);
           }
         }
       }
@@ -604,19 +405,9 @@ Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack C
 
       if (totalStreamedTextLength === 0) {
         const fallbackNotice = isEn
-          ? 'Sorry, there was a brief connection delay while generating the response. Could you please send your message again?'
+          ? 'Sorry, there was a brief connection delay while generating the response. Please send your message again.'
           : 'Üzgünüm, şu anda yanıt oluşturulurken kısa süreli bir bağlantı gecikmesi yaşandı. Lütfen mesajınızı tekrar gönderebilir misiniz?';
         res.write(`data: ${JSON.stringify({ text: fallbackNotice })}\n\n`);
-        if (typeof (res as any).flush === 'function') {
-          (res as any).flush();
-        }
-      }
-
-      // Final flush of any collected grounding sources or web search queries
-      if (collectedSourcesMap.size > 0 || collectedQueries.size > 0) {
-        const sources = Array.from(collectedSourcesMap.values());
-        const searchQueries = Array.from(collectedQueries);
-        res.write(`data: ${JSON.stringify({ sources, searchQueries })}\n\n`);
         if (typeof (res as any).flush === 'function') {
           (res as any).flush();
         }
@@ -630,30 +421,26 @@ Modern, native Android client for Google Gemini built with Kotlin 2.0, Jetpack C
         heartbeat = null;
       }
       console.error('Gemini call error:', err);
-      const isEn = req.body?.uiLanguage === 'en';
+      const isEn = req.body?.uiLanguage !== 'tr';
       const rawMessage = (err as Error)?.message || 'Failed to call Gemini API';
 
       let userFriendlyMessage = rawMessage;
       if (rawMessage.includes('503') || rawMessage.includes('UNAVAILABLE') || rawMessage.includes('overloaded') || rawMessage.includes('high demand') || rawMessage.includes('TIMEOUT')) {
         userFriendlyMessage = isEn
-          ? 'Model Busy (503): Google Gemini servers are experiencing high demand. Please retry in a few seconds.'
-          : 'Model Yoğunluğu (503): Google Gemini sunucularında anlık yoğunluk yaşanıyor. Lütfen birkaç saniye sonra tekrar deneyin.';
+          ? 'Servers are momentarily busy. Please click Retry or send your message again.'
+          : 'Sunucular şu an yoğun. Lütfen Tekrar Dene butonuna tıklayın veya mesajınızı yeniden gönderin.';
       } else if (rawMessage.includes('429') || rawMessage.includes('RESOURCE_EXHAUSTED') || rawMessage.includes('quota')) {
         userFriendlyMessage = isEn
-          ? 'Rate Limit (429): Too many requests sent quickly. Please wait 3-5 seconds or configure your own API key in Settings.'
-          : 'Hız Limiti (429): Çok hızlı mesaj gönderildi. Lütfen 3-5 saniye bekleyin veya Ayarlar menüsünden kendi API anahtarınızı tanımlayın.';
+          ? 'API quota reached for this key. Please wait a few seconds or add a personal Gemini API key in Settings (⚙️).'
+          : 'API hız limitine ulaşıldı. Lütfen birkaç saniye bekleyin veya Ayarlar (⚙️) menüsünden kendi API anahtarınızı ekleyin.';
       } else if (rawMessage.includes('PERMISSION_DENIED') || rawMessage.includes('403')) {
         userFriendlyMessage = isEn
           ? 'Access Denied (403): Please check your Gemini API key in Settings (⚙️).'
           : 'Erişim Reddedildi (403): Lütfen Ayarlar (⚙️) menüsünden Gemini API anahtarınızı kontrol edin.';
-      } else if (rawMessage.includes('NOT_FOUND') || rawMessage.includes('404')) {
-        userFriendlyMessage = isEn
-          ? 'Model Not Found (404): The selected model is currently unavailable.'
-          : 'Model Bulunamadı (404): Seçilen model şu an erişilemiyor.';
       } else if (rawMessage.includes('API_KEY_INVALID') || rawMessage.includes('400')) {
         userFriendlyMessage = isEn
-          ? 'Invalid API Key: Please verify your Gemini API key in Settings (⚙️).'
-          : 'Geçersiz API Anahtarı: Lütfen Ayarlar (⚙️) menüsündeki API anahtarınızı kontrol edin.';
+          ? 'Invalid API Key: Please verify or clear your custom Gemini API key in Settings (⚙️).'
+          : 'Geçersiz API Anahtarı: Lütfen Ayarlar (⚙️) menüsündeki API anahtarınızı kontrol edin veya temizleyin.';
       }
 
       if (!res.headersSent) {

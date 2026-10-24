@@ -4,15 +4,13 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Conversation, Message, GroundingSource, RoleplayProfile } from './types.ts';
+import { Conversation, Message, RoleplayProfile } from './types.ts';
 import { TopAppBar } from './components/TopAppBar.tsx';
 import { ConversationDrawer } from './components/ConversationDrawer.tsx';
 import { ChatArea } from './components/ChatArea.tsx';
 import { ApiKeyModal } from './components/ApiKeyModal.tsx';
 import { DirectiveModal } from './components/DirectiveModal.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
-import { AndroidProjectViewer } from './components/AndroidProjectViewer.tsx';
-import { MaiBrandIcon } from './components/MaiBrandIcon.tsx';
 import { streamGeminiChat, checkServerKeyStatus, fetchModelInfo, ModelInfo } from './utils/geminiClient.ts';
 import {
   buildCombinedDirective,
@@ -21,7 +19,6 @@ import {
   ASSISTANT_FRAMEWORKS,
   ASSISTANT_CATEGORY_TITLES_EN
 } from './utils/directiveFrameworks.ts';
-import { downloadAndroidProjectZip } from './utils/zipExporter.ts';
 import {
   auth,
   User,
@@ -36,7 +33,6 @@ import {
   deleteConversationFromCloud,
   toUserScopedId
 } from './utils/cloudSync.ts';
-import { Smartphone, Code2, Download } from 'lucide-react';
 
 export default function App() {
   // Theme state
@@ -45,36 +41,33 @@ export default function App() {
     return saved !== null ? saved === 'true' : true;
   });
 
-  // Navigation mode: Live Client vs Android Studio Project Code Inspector
-  const [viewMode, setViewMode] = useState<'client' | 'android-project'>('client');
-
   // API Key state
   const [apiKey, setApiKey] = useState<string>(() => {
     return localStorage.getItem('mai_gemini_api_key') || '';
   });
 
-  // Active Gemini model state (Default to gemini-3.8-flash for fast responses & full Google Web Search grounding)
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    const saved = localStorage.getItem('mai_selected_model_v2');
-    return saved || 'gemini-3.8-flash';
-  });
-
+  // Default UI Language = English ('en') on initial launch
   const [uiLanguage, setUiLanguage] = useState<'tr' | 'en'>(() => {
-    return (localStorage.getItem('mai_ui_language') as 'tr' | 'en') || 'tr';
+    return (localStorage.getItem('mai_ui_lang_v3') as 'tr' | 'en') || 'en';
   });
 
   const handleSetLanguage = (lang: 'tr' | 'en') => {
     setUiLanguage(lang);
-    localStorage.setItem('mai_ui_language', lang);
+    localStorage.setItem('mai_ui_lang_v3', lang);
   };
 
+  // Default Model = gemini-3.1-flash-lite on initial launch
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    const saved = localStorage.getItem('mai_selected_model_v3');
+    return saved || 'gemini-3.1-flash-lite';
+  });
+
   const [availableModels, setAvailableModels] = useState<ModelInfo['availableModels']>([
-    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Fast & Web Search)', label: 'Gemini 3.8 Flash' },
-    { id: 'gemini-flash-latest', name: 'Gemini Flash (Balanced)', label: 'Gemini Flash' },
-    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', label: 'Flash-Lite' }
+    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Ultra-Fast Default)', label: 'Gemini 3.1 Flash Lite' },
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', label: 'Gemini 3.8 Flash' },
+    { id: 'gemini-flash-latest', name: 'Gemini Flash', label: 'Gemini Flash' }
   ]);
 
-  // Server-side environment key availability
   const [hasEnvKey, setHasEnvKey] = useState<boolean>(false);
 
   // Firebase Auth User & Cloud Sync State
@@ -86,15 +79,15 @@ export default function App() {
     checkServerKeyStatus().then((status) => setHasEnvKey(status));
     fetchModelInfo().then((info) => {
       setAvailableModels(info.availableModels);
-      if (!localStorage.getItem('mai_selected_model_v2')) {
-        setSelectedModel(info.activeModel || 'gemini-3.8-flash');
+      if (!localStorage.getItem('mai_selected_model_v3')) {
+        setSelectedModel(info.defaultModel || 'gemini-3.1-flash-lite');
       }
     });
   }, []);
 
   const handleSelectModel = (modelId: string) => {
     setSelectedModel(modelId);
-    localStorage.setItem('mai_selected_model_v2', modelId);
+    localStorage.setItem('mai_selected_model_v3', modelId);
   };
 
   const hasActiveKey = Boolean((apiKey && apiKey.trim()) || hasEnvKey);
@@ -134,7 +127,7 @@ export default function App() {
     };
   }, []);
 
-  // Conversations state (persisted locally + synced with Firestore when signed in)
+  // Conversations state
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
       const saved = localStorage.getItem('mai_conversations');
@@ -147,7 +140,7 @@ export default function App() {
     }
     const defaultConv: Conversation = {
       id: 'default-conv-1',
-      title: 'Yeni Sohbet',
+      title: 'New Chat',
       directive: '',
       directiveMode: 'other',
       assistantCategory: 'general',
@@ -298,11 +291,8 @@ export default function App() {
 
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
-  const [isSearchingWeb, setIsSearchingWeb] = useState(false);
   const [isNetworkDone, setIsNetworkDone] = useState(false);
   const [streamingChunk, setStreamingChunk] = useState('');
-  const [streamingSources, setStreamingSources] = useState<GroundingSource[]>([]);
-  const [streamingQueries, setStreamingQueries] = useState<string[]>([]);
   const [pendingAiMessage, setPendingAiMessage] = useState<Message | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -320,17 +310,14 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Persist conversations locally as offline cache
   useEffect(() => {
     localStorage.setItem('mai_conversations', JSON.stringify(conversations));
   }, [conversations]);
 
-  // Persist messages locally as offline cache
   useEffect(() => {
     localStorage.setItem('mai_messages_map', JSON.stringify(messagesMap));
   }, [messagesMap]);
 
-  // Current active conversation & messages
   const activeConversation = conversations.find((c) => c.id === activeConversationId) || conversations[0];
   const activeMessages = activeConversation ? (messagesMap[activeConversation.id] || []) : [];
 
@@ -544,16 +531,13 @@ export default function App() {
     }
 
     setIsStreaming(false);
-    setIsSearchingWeb(false);
     setIsNetworkDone(false);
     setStreamingChunk('');
-    setStreamingSources([]);
-    setStreamingQueries([]);
     setPendingAiMessage(null);
     currentAccumulatedRef.current = '';
   };
 
-  const handleSendMessage = async (text: string, webSearch: boolean = false) => {
+  const handleSendMessage = async (text: string) => {
     if (!activeConversation) return;
     const conversationId = user ? toUserScopedId(user.uid, activeConversation.id) : activeConversation.id;
     activeConvIdRef.current = conversationId;
@@ -619,24 +603,19 @@ export default function App() {
         .finally(() => setIsSyncingCloud(false));
     }
 
-    // Start streaming from Gemini
+    // Start ultra-fast streaming from Gemini
     setIsStreaming(true);
-    setIsSearchingWeb(webSearch);
     setIsNetworkDone(false);
     setStreamingChunk('');
-    setStreamingSources([]);
-    setStreamingQueries([]);
     setPendingAiMessage(null);
     currentAccumulatedRef.current = '';
 
-    // Safety Watchdog: Reset after 35 seconds if anything hangs
     if (watchdogTimerRef.current) {
       clearTimeout(watchdogTimerRef.current);
     }
     watchdogTimerRef.current = setTimeout(() => {
-      console.warn('Streaming watchdog timeout triggered');
       handleStopGeneration();
-    }, 35000);
+    }, 25000);
 
     const effectiveDirective = buildCombinedDirective(
       updatedConvObj.directive || '',
@@ -646,8 +625,6 @@ export default function App() {
     );
 
     let accumulatedText = '';
-    let collectedSources: GroundingSource[] = [];
-    let collectedQueries: string[] = [];
 
     try {
       const stream = streamGeminiChat(
@@ -656,27 +633,15 @@ export default function App() {
         currentMessages,
         effectiveDirective,
         selectedModel,
-        webSearch,
         controller.signal,
         uiLanguage
       );
 
       for await (const chunk of stream) {
-        if (chunk.searching) {
-          setIsSearchingWeb(true);
-        }
         if (chunk.text) {
           accumulatedText += chunk.text;
           currentAccumulatedRef.current = accumulatedText;
           setStreamingChunk(accumulatedText);
-        }
-        if (chunk.sources && chunk.sources.length > 0) {
-          collectedSources = chunk.sources;
-          setStreamingSources(chunk.sources);
-        }
-        if (chunk.searchQueries && chunk.searchQueries.length > 0) {
-          collectedQueries = chunk.searchQueries;
-          setStreamingQueries(chunk.searchQueries);
         }
       }
 
@@ -698,8 +663,6 @@ export default function App() {
         conversationId,
         role: 'model',
         text: finalText,
-        sources: collectedSources.length > 0 ? collectedSources : undefined,
-        searchQueries: collectedQueries.length > 0 ? collectedQueries : undefined,
         timestamp: Date.now()
       };
 
@@ -722,11 +685,8 @@ export default function App() {
       }
 
       setIsStreaming(false);
-      setIsSearchingWeb(false);
       setIsNetworkDone(false);
       setStreamingChunk('');
-      setStreamingSources([]);
-      setStreamingQueries([]);
       setPendingAiMessage(null);
       currentAccumulatedRef.current = '';
     } catch (err: unknown) {
@@ -755,11 +715,8 @@ export default function App() {
         [conversationId]: [...(prev[conversationId] || []), errorMsg]
       }));
       setIsStreaming(false);
-      setIsSearchingWeb(false);
       setIsNetworkDone(false);
       setStreamingChunk('');
-      setStreamingSources([]);
-      setStreamingQueries([]);
       setPendingAiMessage(null);
       currentAccumulatedRef.current = '';
     }
@@ -785,11 +742,8 @@ export default function App() {
       });
     }
     setIsStreaming(false);
-    setIsSearchingWeb(false);
     setIsNetworkDone(false);
     setStreamingChunk('');
-    setStreamingSources([]);
-    setStreamingQueries([]);
     setPendingAiMessage(null);
     currentAccumulatedRef.current = '';
   };
@@ -819,183 +773,121 @@ export default function App() {
       }`}
       style={{ height: viewportHeight }}
     >
-      {/* View Switcher Bar (Client App vs Android Code Inspector) */}
-      <div
-        className={`h-8 shrink-0 border-b flex items-center justify-between px-3 text-xs select-none ${
-          isDarkMode
-            ? 'bg-[#18191a] border-[#202124] text-[#9fa1a0]'
-            : 'bg-[#f8f9fa] border-[#e3e8ef] text-[#5e6266]'
-        }`}
-      >
-        <div className="flex items-center gap-2 text-[11px] font-medium">
-          <MaiBrandIcon size={18} invert={!isDarkMode} />
-          <span className="font-semibold tracking-tight text-black dark:text-white">mAI</span>
-        </div>
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+        {/* Top App Bar */}
+        <TopAppBar
+          isDarkMode={isDarkMode}
+          onOpenDrawer={() => setIsDrawerOpen(true)}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenDirective={() => setIsDirectiveModalOpen(true)}
+          hasApiKey={hasActiveKey}
+          hasDirective={hasActiveDirective}
+          directiveBadgeText={activeDirectiveDisplay}
+          activeConversationTitle={activeConversation?.title}
+          onRenameActiveChat={(newTitle) =>
+            activeConversation && handleRenameConversation(activeConversation.id, newTitle)
+          }
+          currentModel={selectedModel}
+          onSelectModel={handleSelectModel}
+          availableModels={availableModels}
+          uiLanguage={uiLanguage}
+          user={user}
+          isAuthLoading={isAuthLoading}
+          isSyncingCloud={isSyncingCloud}
+          onSignInGoogle={handleGoogleSignIn}
+          onSignOutGoogle={handleGoogleSignOut}
+        />
 
-        <div className="flex items-center gap-1.5 text-[11px]">
-          <button
-            onClick={() => setViewMode('client')}
-            className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
-              viewMode === 'client'
-                ? 'bg-[#1a73e8] text-white shadow-xs'
-                : 'hover:bg-black/5 dark:hover:bg-white/5 opacity-70'
-            }`}
-          >
-            <Smartphone className="w-3 h-3" />
-            <span>{uiLanguage === 'tr' ? 'Sohbet' : 'Chat'}</span>
-          </button>
+        {/* Main Chat Area */}
+        <ChatArea
+          isDarkMode={isDarkMode}
+          messages={activeMessages}
+          streamingChunk={streamingChunk}
+          isStreaming={isStreaming}
+          isNetworkDone={isNetworkDone}
+          onSendMessage={handleSendMessage}
+          onTypingComplete={handleTypingComplete}
+          onStopGeneration={handleStopGeneration}
+          onOpenApiKey={() => setIsApiKeyModalOpen(true)}
+          hasApiKey={hasActiveKey}
+          uiLanguage={uiLanguage}
+        />
 
-          <button
-            onClick={() => setViewMode('android-project')}
-            className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
-              viewMode === 'android-project'
-                ? 'bg-[#1a73e8] text-white shadow-xs'
-                : 'hover:bg-black/5 dark:hover:bg-white/5 opacity-70'
-            }`}
-          >
-            <Code2 className="w-3 h-3" />
-            <span>{uiLanguage === 'tr' ? 'Android Kodları' : 'Android Code'}</span>
-          </button>
+        {/* Conversation Drawer */}
+        <ConversationDrawer
+          isOpen={isDrawerOpen}
+          isDarkMode={isDarkMode}
+          onClose={() => setIsDrawerOpen(false)}
+          conversations={conversations}
+          activeConversationId={activeConversation?.id || activeConversationId}
+          onSelectConversation={setActiveConversationId}
+          onNewChat={() => handleNewChat()}
+          onDeleteConversation={handleDeleteConversation}
+          onRenameConversation={handleRenameConversation}
+          onClearAllConversations={handleClearAllConversations}
+          uiLanguage={uiLanguage}
+          user={user}
+          isSyncingCloud={isSyncingCloud}
+          onSignInGoogle={handleGoogleSignIn}
+          onSignOutGoogle={handleGoogleSignOut}
+        />
 
-          <button
-            onClick={() => downloadAndroidProjectZip()}
-            className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#34a853] hover:bg-[#2d9247] text-white shadow-xs transition-transform active:scale-95 cursor-pointer ml-1"
-            title={
-              uiLanguage === 'tr'
-                ? 'Android Studio için en güncel v2.0.0 ZIP projesini indir'
-                : 'Download latest v2.0.0 ZIP project for Android Studio'
-            }
-          >
-            <Download className="w-3 h-3" />
-            <span>{uiLanguage === 'tr' ? 'ZIP İndir (v2.0.0)' : 'Download ZIP (v2.0.0)'}</span>
-          </button>
-        </div>
+        {/* API Key Modal */}
+        <ApiKeyModal
+          isOpen={isApiKeyModalOpen}
+          isDarkMode={isDarkMode}
+          onClose={() => setIsApiKeyModalOpen(false)}
+          apiKey={apiKey}
+          onSaveApiKey={handleSaveApiKey}
+          hasEnvKey={hasEnvKey}
+          uiLanguage={uiLanguage}
+        />
+
+        {/* Directive Modal */}
+        <DirectiveModal
+          isOpen={isDirectiveModalOpen}
+          isDarkMode={isDarkMode}
+          onClose={() => setIsDirectiveModalOpen(false)}
+          conversationId={activeConversation?.id}
+          directive={activeConversation?.directive || ''}
+          directiveMode={
+            activeConversation?.directiveMode ||
+            (activeConversation?.roleplayProfile?.name?.trim() ? 'roleplay' : 'other')
+          }
+          assistantCategory={activeConversation?.assistantCategory || 'general'}
+          roleplayProfile={activeConversation?.roleplayProfile}
+          onSaveDirective={handleSaveDirective}
+          conversationTitle={activeConversation?.title}
+          onApplyGreeting={handleApplyGreeting}
+          uiLanguage={uiLanguage}
+        />
+
+        {/* Settings Modal */}
+        <SettingsModal
+          isOpen={isSettingsModalOpen}
+          isDarkMode={isDarkMode}
+          onClose={() => setIsSettingsModalOpen(false)}
+          onOpenDirective={() => setIsDirectiveModalOpen(true)}
+          onOpenApiKey={() => setIsApiKeyModalOpen(true)}
+          onToggleTheme={handleToggleTheme}
+          onDeleteActiveChat={() =>
+            activeConversation && handleDeleteConversation(activeConversation.id)
+          }
+          hasApiKey={hasActiveKey}
+          hasDirective={hasActiveDirective}
+          directivePreview={activeDirectiveDisplay}
+          currentModel={selectedModel}
+          onSelectModel={handleSelectModel}
+          availableModels={availableModels}
+          activeConversationTitle={activeConversation?.title}
+          uiLanguage={uiLanguage}
+          onSetLanguage={handleSetLanguage}
+          user={user}
+          isSyncingCloud={isSyncingCloud}
+          onSignInGoogle={handleGoogleSignIn}
+          onSignOutGoogle={handleGoogleSignOut}
+        />
       </div>
-
-      {viewMode === 'client' ? (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-          {/* Top App Bar */}
-          <TopAppBar
-            isDarkMode={isDarkMode}
-            onOpenDrawer={() => setIsDrawerOpen(true)}
-            onOpenSettings={() => setIsSettingsModalOpen(true)}
-            onOpenDirective={() => setIsDirectiveModalOpen(true)}
-            hasApiKey={hasActiveKey}
-            hasDirective={hasActiveDirective}
-            directiveBadgeText={activeDirectiveDisplay}
-            activeConversationTitle={activeConversation?.title}
-            onRenameActiveChat={(newTitle) =>
-              activeConversation && handleRenameConversation(activeConversation.id, newTitle)
-            }
-            currentModel={selectedModel}
-            onSelectModel={handleSelectModel}
-            availableModels={availableModels}
-            uiLanguage={uiLanguage}
-            user={user}
-            isAuthLoading={isAuthLoading}
-            isSyncingCloud={isSyncingCloud}
-            onSignInGoogle={handleGoogleSignIn}
-            onSignOutGoogle={handleGoogleSignOut}
-          />
-
-          {/* Main Chat Area */}
-          <ChatArea
-            isDarkMode={isDarkMode}
-            messages={activeMessages}
-            streamingChunk={streamingChunk}
-            streamingSources={streamingSources}
-            streamingQueries={streamingQueries}
-            isStreaming={isStreaming}
-            isSearchingWeb={isSearchingWeb}
-            isNetworkDone={isNetworkDone}
-            onSendMessage={handleSendMessage}
-            onTypingComplete={handleTypingComplete}
-            onStopGeneration={handleStopGeneration}
-            directiveText={activeDirectiveDisplay}
-            onOpenDirective={() => setIsDirectiveModalOpen(true)}
-            onOpenApiKey={() => setIsApiKeyModalOpen(true)}
-            hasApiKey={hasActiveKey}
-            uiLanguage={uiLanguage}
-          />
-
-          {/* Conversation Drawer */}
-          <ConversationDrawer
-            isOpen={isDrawerOpen}
-            isDarkMode={isDarkMode}
-            onClose={() => setIsDrawerOpen(false)}
-            conversations={conversations}
-            activeConversationId={activeConversation?.id || activeConversationId}
-            onSelectConversation={setActiveConversationId}
-            onNewChat={() => handleNewChat()}
-            onDeleteConversation={handleDeleteConversation}
-            onRenameConversation={handleRenameConversation}
-            onClearAllConversations={handleClearAllConversations}
-            uiLanguage={uiLanguage}
-            user={user}
-            isSyncingCloud={isSyncingCloud}
-            onSignInGoogle={handleGoogleSignIn}
-            onSignOutGoogle={handleGoogleSignOut}
-          />
-
-          {/* API Key Modal */}
-          <ApiKeyModal
-            isOpen={isApiKeyModalOpen}
-            isDarkMode={isDarkMode}
-            onClose={() => setIsApiKeyModalOpen(false)}
-            apiKey={apiKey}
-            onSaveApiKey={handleSaveApiKey}
-            hasEnvKey={hasEnvKey}
-            uiLanguage={uiLanguage}
-          />
-
-          {/* Directive Modal */}
-          <DirectiveModal
-            isOpen={isDirectiveModalOpen}
-            isDarkMode={isDarkMode}
-            onClose={() => setIsDirectiveModalOpen(false)}
-            conversationId={activeConversation?.id}
-            directive={activeConversation?.directive || ''}
-            directiveMode={
-              activeConversation?.directiveMode ||
-              (activeConversation?.roleplayProfile?.name?.trim() ? 'roleplay' : 'other')
-            }
-            assistantCategory={activeConversation?.assistantCategory || 'general'}
-            roleplayProfile={activeConversation?.roleplayProfile}
-            onSaveDirective={handleSaveDirective}
-            conversationTitle={activeConversation?.title}
-            onApplyGreeting={handleApplyGreeting}
-            uiLanguage={uiLanguage}
-          />
-
-          {/* Settings Modal */}
-          <SettingsModal
-            isOpen={isSettingsModalOpen}
-            isDarkMode={isDarkMode}
-            onClose={() => setIsSettingsModalOpen(false)}
-            onOpenDirective={() => setIsDirectiveModalOpen(true)}
-            onOpenApiKey={() => setIsApiKeyModalOpen(true)}
-            onToggleTheme={handleToggleTheme}
-            onDeleteActiveChat={() =>
-              activeConversation && handleDeleteConversation(activeConversation.id)
-            }
-            hasApiKey={hasActiveKey}
-            hasDirective={hasActiveDirective}
-            directivePreview={activeDirectiveDisplay}
-            currentModel={selectedModel}
-            onSelectModel={handleSelectModel}
-            availableModels={availableModels}
-            activeConversationTitle={activeConversation?.title}
-            uiLanguage={uiLanguage}
-            onSetLanguage={handleSetLanguage}
-            user={user}
-            isSyncingCloud={isSyncingCloud}
-            onSignInGoogle={handleGoogleSignIn}
-            onSignOutGoogle={handleGoogleSignOut}
-          />
-        </div>
-      ) : (
-        <AndroidProjectViewer isDarkMode={isDarkMode} />
-      )}
     </div>
   );
 }
