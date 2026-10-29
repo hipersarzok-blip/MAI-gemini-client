@@ -87,10 +87,14 @@ export async function saveConversationToCloud(
   try {
     let existsInCloud = knownCloudConvIds.has(cloudId);
     if (!existsInCloud) {
-      const snap = await getDoc(docRef);
-      existsInCloud = snap.exists();
-      if (existsInCloud) {
-        knownCloudConvIds.add(cloudId);
+      try {
+        const snap = await getDoc(docRef);
+        existsInCloud = snap.exists();
+        if (existsInCloud) {
+          knownCloudConvIds.add(cloudId);
+        }
+      } catch {
+        existsInCloud = false;
       }
     }
 
@@ -123,6 +127,7 @@ export async function saveConversationToCloud(
     return cloudId;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    return cloudId;
   }
 }
 
@@ -169,19 +174,91 @@ export async function saveMessageToCloud(
   }
 
   try {
-    if (!knownCloudMsgIds.has(cloudMsgId)) {
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        knownCloudMsgIds.add(cloudMsgId);
-        return cloudMsgId;
+    let exists = knownCloudMsgIds.has(cloudMsgId);
+    let existingText: string | undefined;
+    if (!exists) {
+      try {
+        const snap = await getDoc(docRef);
+        exists = snap.exists();
+        if (exists) {
+          knownCloudMsgIds.add(cloudMsgId);
+          existingText = snap.data()?.text;
+        }
+      } catch {
+        exists = false;
       }
+    }
+
+    if (exists) {
+      if (existingText !== safeText) {
+        await updateDoc(docRef, {
+          text: safeText
+        });
+      }
+    } else {
       await setDoc(docRef, payload);
       knownCloudMsgIds.add(cloudMsgId);
     }
     return cloudMsgId;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return cloudMsgId;
   }
+}
+
+// Track deleted conversation IDs so in-flight snapshots never re-add deleted chats
+const deletedConvIds = new Set<string>(
+  (() => {
+    try {
+      const saved = localStorage.getItem('mai_deleted_conv_ids_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed.slice(-300);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return [];
+  })()
+);
+
+function persistDeletedConvIds() {
+  try {
+    const arr = Array.from(deletedConvIds).slice(-300);
+    localStorage.setItem('mai_deleted_conv_ids_v1', JSON.stringify(arr));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function markConversationDeletedLocal(conversationId: string, userId?: string): void {
+  deletedConvIds.add(conversationId);
+  knownCloudConvIds.delete(conversationId);
+  if (userId) {
+    const scoped = toUserScopedId(userId, conversationId);
+    deletedConvIds.add(scoped);
+    knownCloudConvIds.delete(scoped);
+  }
+  persistDeletedConvIds();
+}
+
+export function isConversationDeleted(conversationId: string, userId?: string): boolean {
+  if (deletedConvIds.has(conversationId)) return true;
+  if (userId && deletedConvIds.has(toUserScopedId(userId, conversationId))) return true;
+  return false;
+}
+
+export async function deleteMessagesFromCloud(
+  userId: string,
+  messagesToDelete: Message[]
+): Promise<void> {
+  await Promise.allSettled(
+    messagesToDelete.map(async (m) => {
+      const cloudMsgId = toUserScopedId(userId, m.id);
+      knownCloudMsgIds.delete(cloudMsgId);
+      await deleteDoc(doc(db, 'messages', cloudMsgId));
+    })
+  );
 }
 
 export async function deleteConversationFromCloud(
@@ -191,20 +268,12 @@ export async function deleteConversationFromCloud(
 ): Promise<void> {
   const cloudConvId = toUserScopedId(userId, conversationId);
   const convPath = `conversations/${cloudConvId}`;
+  markConversationDeletedLocal(conversationId, userId);
 
   try {
-    // Delete associated messages first
-    for (const m of messagesForConv) {
-      const cloudMsgId = toUserScopedId(userId, m.id);
-      try {
-        await deleteDoc(doc(db, 'messages', cloudMsgId));
-        knownCloudMsgIds.delete(cloudMsgId);
-      } catch {
-        // Ignore individual message deletion failure if not in cloud
-      }
-    }
+    // Delete the conversation document first so snapshot immediately removes it
     await deleteDoc(doc(db, 'conversations', cloudConvId));
-    knownCloudConvIds.delete(cloudConvId);
+    await deleteMessagesFromCloud(userId, messagesForConv);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, convPath);
   }
@@ -230,6 +299,9 @@ export function subscribeToUserChats(
     (snapshot) => {
       const loaded: Conversation[] = [];
       snapshot.forEach((docSnap) => {
+        if (isConversationDeleted(docSnap.id, userId)) {
+          return;
+        }
         const data = docSnap.data();
         knownCloudConvIds.add(docSnap.id);
         loaded.push({

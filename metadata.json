@@ -1,5 +1,5 @@
 {
-  "name": "Remix Remix Remix mAI - Minimalist AI Chat Client",
+  "name": " mAI - Minimalist AI Chat Client",
   "description": "Minimalist AI chat client for Android (Kotlin \u0026 Jetpack Compose) and Web with Gemini API, custom system directives, and conversation management.",
   "requestFramePermissions": [],
   "majorCapabilities": [

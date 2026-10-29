@@ -25,9 +25,6 @@ interface SettingsModalProps {
   hasApiKey: boolean;
   hasDirective: boolean;
   directivePreview?: string;
-  currentModel: string;
-  onSelectModel: (modelId: string) => void;
-  availableModels: { id: string; name: string; label: string }[];
   activeConversationTitle?: string;
   uiLanguage: 'tr' | 'en';
   onSetLanguage: (lang: 'tr' | 'en') => void;
@@ -47,9 +44,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   hasApiKey,
   hasDirective,
   directivePreview,
-  currentModel,
-  onSelectModel,
-  availableModels,
   activeConversationTitle,
   uiLanguage,
   onSetLanguage,
@@ -195,11 +189,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Section 1: Directive & Roleplay */}
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider opacity-60 mb-2 px-1">
+          <div className="space-y-2.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider opacity-60 px-1">
               {uiLanguage === 'tr' ? 'Yapay Zeka & Direktif' : 'AI & Directives'}
             </div>
 
+            {/* Roleplay & Directives Card */}
             <button
               type="button"
               onClick={() => {
@@ -238,8 +233,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className={`text-[11px] mt-0.5 ${isDarkMode ? 'text-[#9fa1a0]' : 'text-[#747775]'}`}>
                     {directivePreview ||
                       (uiLanguage === 'tr'
-                        ? '120+ anime karakteri, Roleplay Engine veya uzmanlık ayarları'
-                        : '120+ anime characters, Roleplay Engine or expertise settings')}
+                        ? '120+ anime karakteri, Karakter Kütüphanem veya uzmanlık ayarları'
+                        : '120+ anime characters, Character Library or expertise settings')}
                   </p>
                 </div>
               </div>
@@ -304,43 +299,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
             </button>
-          </div>
-
-          {/* Section 3: Active Gemini Model */}
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider opacity-60 mb-2 px-1">
-              {uiLanguage === 'tr' ? 'Aktif Gemini Modeli' : 'Active Gemini Model'}
-            </div>
-
-            <div
-              className={`p-1.5 rounded-2xl border flex flex-col gap-1 ${
-                isDarkMode ? 'bg-[#18191a] border-[#2f3032]' : 'bg-[#f8f9fa] border-[#e3e8ef]'
-              }`}
-            >
-              {availableModels.map((m) => {
-                const isSelected = m.id === currentModel;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => onSelectModel(m.id)}
-                    className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-200 text-left active:scale-[0.98] cursor-pointer ${
-                      isSelected
-                        ? isDarkMode
-                          ? 'bg-[#282a2c] text-white font-medium border border-[#3b3d40] shadow-xs'
-                          : 'bg-white text-[#1a73e8] font-medium border border-[#dfe3e8] shadow-xs'
-                        : 'opacity-70 hover:opacity-100 hover:translate-x-0.5'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-semibold text-xs">{m.label}</div>
-                      <div className="text-[10px] opacity-60 font-mono">{m.id}</div>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-[#4285f4] shrink-0 animate-scale-in" />}
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           {/* Section 4: Appearance & Theme */}

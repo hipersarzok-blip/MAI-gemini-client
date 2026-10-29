@@ -1,4 +1,4 @@
-import { Message } from '../types.ts';
+import { GroundingSource, Message, MessageAttachment } from '../types.ts';
 
 export async function checkServerKeyStatus(): Promise<boolean> {
   try {
@@ -8,6 +8,42 @@ export async function checkServerKeyStatus(): Promise<boolean> {
     return Boolean(data.hasEnvKey);
   } catch {
     return false;
+  }
+}
+
+export async function verifyGeminiApiKey(
+  apiKey: string,
+  uiLanguage: 'tr' | 'en' = 'tr'
+): Promise<{
+  valid: boolean;
+  workingModel?: string;
+  keyCount?: number;
+  sanitizedKey?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/verify-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, uiLanguage })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.valid) {
+      return {
+        valid: false,
+        error:
+          data.error ||
+          (uiLanguage === 'en' ? 'Could not verify API key.' : 'API anahtarı doğrulanamadı.')
+      };
+    }
+    return data;
+  } catch (err: any) {
+    return {
+      valid: false,
+      error:
+        err?.message ||
+        (uiLanguage === 'en' ? 'Connection error during verification.' : 'Doğrulama sırasında bağlantı hatası.')
+    };
   }
 }
 
@@ -41,6 +77,8 @@ export async function fetchModelInfo(): Promise<ModelInfo> {
 
 export interface StreamChunkData {
   text?: string;
+  sources?: GroundingSource[];
+  searchQueries?: string[];
 }
 
 export async function* streamGeminiChat(
@@ -50,9 +88,33 @@ export async function* streamGeminiChat(
   directive: string,
   model: string = 'gemini-3.1-flash-lite',
   signal?: AbortSignal,
-  uiLanguage: 'tr' | 'en' = 'en'
+  uiLanguage: 'tr' | 'en' = 'en',
+  attachments?: MessageAttachment[]
 ): AsyncGenerator<StreamChunkData, void, unknown> {
   const trimmedKey = apiKey?.trim() || '';
+
+  // Send the full conversation history in the background (only keep heavy binary base64 on the last 2 messages so payload stays fast)
+  const totalHistory = history || [];
+  const compactHistory = totalHistory.map((m, idx) => {
+    const isRecentBinaryTurn = idx >= totalHistory.length - 2;
+    return {
+      id: m.id,
+      conversationId: m.conversationId,
+      role: m.role,
+      text: m.text,
+      timestamp: m.timestamp,
+      attachments: m.attachments
+        ? m.attachments.map(({ previewUrl, data, ...rest }) =>
+            isRecentBinaryTurn ? { ...rest, data } : rest
+          )
+        : undefined
+    };
+  });
+
+  const compactAttachments =
+    attachments && attachments.length > 0
+      ? attachments.map(({ previewUrl, ...rest }) => rest)
+      : undefined;
 
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -63,10 +125,11 @@ export async function* streamGeminiChat(
     body: JSON.stringify({
       apiKey: trimmedKey,
       prompt,
-      history,
+      history: compactHistory,
       directive,
       model: model || 'gemini-3.1-flash-lite',
-      uiLanguage
+      uiLanguage,
+      attachments: compactAttachments
     })
   });
 
@@ -120,8 +183,12 @@ export async function* streamGeminiChat(
         throw new Error(parsed.error);
       }
 
-      if (parsed.text) {
-        yield { text: parsed.text };
+      if (parsed.text || parsed.sources || parsed.searchQueries) {
+        yield {
+          text: parsed.text,
+          sources: Array.isArray(parsed.sources) ? parsed.sources : undefined,
+          searchQueries: Array.isArray(parsed.searchQueries) ? parsed.searchQueries : undefined
+        };
       }
     }
   }

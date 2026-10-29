@@ -21,12 +21,37 @@ export interface RoleplayProfile {
   unbreakableImmersion?: boolean; // 4. duvarı asla yıkmama kuralı
 }
 
+export interface SavedCharacter {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  profile: RoleplayProfile;
+}
+
+
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  /** Raw base64 payload (without data:...;base64, prefix) for images/PDFs */
+  data?: string;
+  /** Data URL for rendering image thumbnail in the chat UI */
+  previewUrl?: string;
+  /** Extracted UTF-8 text content for code/text files */
+  textContent?: string;
+  size?: number;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  variants?: string[];
+  activeVariantIndex?: number;
+  attachments?: MessageAttachment[];
+  starred?: boolean;
   sources?: GroundingSource[];
   searchQueries?: string[];
 }

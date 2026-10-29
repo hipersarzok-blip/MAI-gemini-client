@@ -3,7 +3,8 @@ import {
   X, Check, ChevronDown, Sparkles, Search, Download, Upload, Shield,
   Code2, Cloud, ShieldCheck, Database, Layers, Network, BookOpen, GraduationCap, 
   Calculator, Atom, Stethoscope, Pill, Dumbbell, Brain, TrendingUp, Scale, Rocket, 
-  Target, ListTodo, Edit3, PenTool, Clapperboard, Globe, Briefcase, HelpCircle, LucideIcon
+  Target, ListTodo, Edit3, PenTool, Clapperboard, Globe, Briefcase, HelpCircle, LucideIcon,
+  Bookmark, Plus, Trash2, MessageSquarePlus
 } from 'lucide-react';
 import { 
   DirectiveMode, 
@@ -15,7 +16,7 @@ import {
   ROLEPLAY_PRESETS,
   RoleplayTemplateItem
 } from '../utils/directiveFrameworks.ts';
-import { RoleplayProfile } from '../types.ts';
+import { RoleplayProfile, SavedCharacter } from '../types.ts';
 
 const CATEGORY_ICONS: Record<AssistantCategory, LucideIcon> = {
   coding: Code2,
@@ -66,6 +67,10 @@ interface DirectiveModalProps {
   ) => void;
   conversationTitle?: string;
   onApplyGreeting?: (greetingText: string) => void;
+  savedCharacters?: SavedCharacter[];
+  onSaveCharacterToLibrary?: (profile: RoleplayProfile) => void;
+  onDeleteCharacterFromLibrary?: (id: string) => void;
+  onStartNewChatWithCharacter?: (profile: RoleplayProfile) => void;
   uiLanguage?: 'tr' | 'en';
 }
 
@@ -81,6 +86,10 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
   onSaveDirective,
   conversationTitle,
   onApplyGreeting,
+  savedCharacters = [],
+  onSaveCharacterToLibrary,
+  onDeleteCharacterFromLibrary,
+  onStartNewChatWithCharacter,
   uiLanguage = 'tr'
 }) => {
   const isEn = uiLanguage === 'en';
@@ -113,11 +122,13 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
   const [rpGreeting, setRpGreeting] = useState(roleplayProfile?.greeting || '');
   const [autoInsertGreeting, setAutoInsertGreeting] = useState(false);
 
-  // Preset filter
+  // Preset & Library filter
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [presetGenderFilter, setPresetGenderFilter] = useState<'all' | 'female' | 'male'>('all');
   const [presetSearchQuery, setPresetSearchQuery] = useState<string>('');
   const [showPresetsView, setShowPresetsView] = useState(false);
+  const [showLibraryView, setShowLibraryView] = useState(false);
+  const [justSavedToLibrary, setJustSavedToLibrary] = useState(false);
 
   const wasOpenRef = React.useRef<boolean>(false);
   const lastConvIdRef = React.useRef<string | undefined>(conversationId);
@@ -144,6 +155,8 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
     setSearchQuery('');
     setActiveDomain('all');
     setShowPresetsView(false);
+    setShowLibraryView(false);
+    setJustSavedToLibrary(false);
     setAutoInsertGreeting(false);
 
     if (roleplayProfile && (
@@ -196,6 +209,44 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
     setRpCustomRules(preset.customRules || '');
     setRpGreeting(preset.greeting);
     setShowPresetsView(false);
+  };
+
+  const loadSavedCharacter = (profile: RoleplayProfile) => {
+    setRpName(profile.name || '');
+    setRpRole(profile.role || '');
+    setRpAvatar(profile.avatarEmoji || '🎭');
+    setRpGender(profile.gender || (isEn ? 'Female' : 'Kadın'));
+    setRpAppearance(profile.appearance || '');
+    setRpPersonality(profile.personality || '');
+    setRpScenario(profile.scenario || '');
+    setRpRelationship(profile.relationship || '');
+    setRpSpeechStyle(profile.speechStyle || '');
+    setRpEmotionalFlaws(profile.emotionalFlaws || '');
+    setRpCustomRules(profile.customRules || '');
+    setRpGreeting(profile.greeting || '');
+    setShowLibraryView(false);
+  };
+
+  const handleSaveCurrentToLibrary = () => {
+    if (!rpName.trim() || !onSaveCharacterToLibrary) return;
+    const profileToSave: RoleplayProfile = {
+      name: rpName.trim(),
+      role: rpRole.trim(),
+      avatarEmoji: rpAvatar || '🎭',
+      gender: rpGender.trim(),
+      appearance: rpAppearance.trim(),
+      personality: rpPersonality.trim(),
+      scenario: rpScenario.trim(),
+      relationship: rpRelationship.trim(),
+      speechStyle: rpSpeechStyle.trim(),
+      emotionalFlaws: rpEmotionalFlaws.trim(),
+      customRules: rpCustomRules.trim(),
+      greeting: rpGreeting.trim(),
+      unbreakableImmersion: true
+    };
+    onSaveCharacterToLibrary(profileToSave);
+    setJustSavedToLibrary(true);
+    setTimeout(() => setJustSavedToLibrary(false), 2000);
   };
 
   const handleExportCharacter = () => {
@@ -287,28 +338,29 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
       rpCustomRules.trim()
     );
 
-    const finalRpProfile: RoleplayProfile | undefined = hasRpData
-      ? {
-          name: rpName.trim(),
-          role: rpRole.trim(),
-          avatarEmoji: rpAvatar,
-          gender: rpGender.trim(),
-          appearance: rpAppearance.trim(),
-          personality: rpPersonality.trim(),
-          scenario: rpScenario.trim(),
-          relationship: rpRelationship.trim(),
-          speechStyle: rpSpeechStyle.trim(),
-          emotionalFlaws: rpEmotionalFlaws.trim(),
-          customRules: rpCustomRules.trim(),
-          greeting: rpGreeting.trim(),
-          unbreakableImmersion: true
-        }
-      : undefined;
-
     const effectiveModeToSave: DirectiveMode =
       selectedMode === 'roleplay' && !hasRpData && !customText.trim()
         ? 'other'
         : selectedMode;
+
+    const finalRpProfile: RoleplayProfile | undefined =
+      effectiveModeToSave === 'roleplay' && hasRpData
+        ? {
+            name: rpName.trim(),
+            role: rpRole.trim(),
+            avatarEmoji: rpAvatar,
+            gender: rpGender.trim(),
+            appearance: rpAppearance.trim(),
+            personality: rpPersonality.trim(),
+            scenario: rpScenario.trim(),
+            relationship: rpRelationship.trim(),
+            speechStyle: rpSpeechStyle.trim(),
+            emotionalFlaws: rpEmotionalFlaws.trim(),
+            customRules: rpCustomRules.trim(),
+            greeting: rpGreeting.trim(),
+            unbreakableImmersion: true
+          }
+        : undefined;
 
     onSaveDirective(customText.trim(), effectiveModeToSave, selectedCategory, finalRpProfile);
 
@@ -475,22 +527,82 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
           {/* ========================================================= */}
           {selectedMode === 'roleplay' && (
             <div key="tab-roleplay" className="space-y-3.5 pt-1 animate-fade-up">
-              {/* Presets and Controls Bar */}
+              {/* Presets, Saved Character Library (H1) and Controls Bar */}
               <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setShowPresetsView(!showPresetsView)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4285f4] text-white font-medium hover:bg-[#1a73e8] transition-colors shadow-xs text-xs"
+                    onClick={() => {
+                      setShowPresetsView(!showPresetsView);
+                      if (!showPresetsView) setShowLibraryView(false);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4285f4] text-white font-medium hover:bg-[#1a73e8] transition-colors shadow-xs text-xs cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>
                       {isEn
-                        ? `Character Presets (${ROLEPLAY_PRESETS.length})`
+                        ? `Presets (${ROLEPLAY_PRESETS.length})`
                         : `Hazır Karakterler (${ROLEPLAY_PRESETS.length})`}
                     </span>
                     <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform duration-200 ${showPresetsView ? 'rotate-180' : ''}`} />
                   </button>
+
+                  {/* H1: My Character Library Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLibraryView(!showLibraryView);
+                      if (!showLibraryView) setShowPresetsView(false);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors shadow-xs text-xs border cursor-pointer ${
+                      showLibraryView
+                        ? 'bg-[#9b72cb] text-white border-[#9b72cb]'
+                        : isDarkMode
+                          ? 'bg-[#18191a] hover:bg-[#282a2c] text-[#d0bcff] border-[#9b72cb]/40'
+                          : 'bg-[#f8f5ff] hover:bg-[#efe8ff] text-[#7627bb] border-[#9b72cb]/40'
+                    }`}
+                  >
+                    <Bookmark className="w-3.5 h-3.5" />
+                    <span>
+                      {isEn
+                        ? `My Character Library (${savedCharacters.length})`
+                        : `Karakter Kütüphanem (${savedCharacters.length})`}
+                    </span>
+                    <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform duration-200 ${showLibraryView ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* H1: Quick Save Current Character to Library */}
+                  {onSaveCharacterToLibrary && (
+                    <button
+                      type="button"
+                      disabled={!rpName.trim()}
+                      onClick={handleSaveCurrentToLibrary}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        justSavedToLibrary
+                          ? 'bg-[#34a853]/15 border-[#34a853]/50 text-[#34a853]'
+                          : isDarkMode
+                            ? 'border-white/15 hover:bg-white/5 text-[#e3e3e3]'
+                            : 'border-black/15 hover:bg-black/5 text-[#1f1f1f]'
+                      }`}
+                      title={
+                        isEn
+                          ? 'Save current character fields into your Character Library'
+                          : 'Mevcut karakteri Karakter Kütüphaneme kaydet'
+                      }
+                    >
+                      {justSavedToLibrary ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-[#34a853]" />
+                          <span>{isEn ? 'Saved to Library!' : 'Kütüphaneye Kaydedildi!'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5 text-[#9b72cb]" />
+                          <span>{isEn ? 'Save to Library' : 'Kütüphaneme Kaydet'}</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -513,6 +625,115 @@ export const DirectiveModal: React.FC<DirectiveModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* H1: My Saved Character Library Accordion */}
+              {showLibraryView && (
+                <div className="p-3 rounded-xl border border-[#9b72cb]/35 bg-[#9b72cb]/5 space-y-2.5 animate-accordion">
+                  <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[#9b72cb]/20">
+                    <span className="font-semibold text-xs text-[#9b72cb] dark:text-[#d0bcff] flex items-center gap-1.5">
+                      <Bookmark className="w-3.5 h-3.5" />
+                      <span>
+                        {isEn
+                          ? `My Saved Characters (${savedCharacters.length})`
+                          : `Kayıtlı Karakter Kütüphanem (${savedCharacters.length})`}
+                      </span>
+                    </span>
+                    <span className="text-[10.5px] opacity-70">
+                      {isEn
+                        ? 'Load into this chat or start a new chat in 1 click'
+                        : 'Tek tıkla bu sohbete yükleyin veya yeni sohbet başlatın'}
+                    </span>
+                  </div>
+
+                  {savedCharacters.length === 0 ? (
+                    <div className="py-5 px-3 text-center space-y-1.5 opacity-75">
+                      <p className="text-xs font-medium">
+                        {isEn
+                          ? 'Your Character Library is empty.'
+                          : 'Karakter Kütüphanenizde henüz kayıtlı karakter yok.'}
+                      </p>
+                      <p className="text-[11px] opacity-80">
+                        {isEn
+                          ? 'Fill out a character below (or customize a preset) and click "+ Save to Library" to keep it forever.'
+                          : 'Aşağıdan kendi karakterinizi oluşturup (veya hazır bir karakteri düzenleyip) "+ Kütüphaneme Kaydet" butonuna basarak buraya ekleyebilirsiniz.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+                      {savedCharacters.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                            isDarkMode
+                              ? 'bg-[#18191a] border-[#2f3032] hover:border-[#9b72cb]/60'
+                              : 'bg-white border-[#dfe3e8] hover:border-[#9b72cb]/60'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-2xl shrink-0 p-1 rounded-lg bg-black/5 dark:bg-white/5">
+                              {item.profile.avatarEmoji || '🎭'}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-bold text-xs truncate">
+                                  {item.profile.name}
+                                </span>
+                                {onDeleteCharacterFromLibrary && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteCharacterFromLibrary(item.id)}
+                                    className="p-1 rounded-md text-[#9fa1a0] hover:text-[#ea4335] hover:bg-[#ea4335]/10 transition-colors cursor-pointer shrink-0"
+                                    title={isEn ? 'Remove from library' : 'Kütüphaneden sil'}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                              {item.profile.role && (
+                                <span className="text-[11px] text-[#9b72cb] dark:text-[#d0bcff] block truncate">
+                                  {item.profile.role}
+                                </span>
+                              )}
+                              {item.profile.personality && (
+                                <p className="text-[10px] opacity-70 line-clamp-2 mt-0.5 leading-tight">
+                                  {item.profile.personality}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 pt-1 border-t border-black/5 dark:border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => loadSavedCharacter(item.profile)}
+                              className={`flex-1 py-1 px-2 rounded-lg text-[10.5px] font-medium transition-colors cursor-pointer ${
+                                isDarkMode
+                                  ? 'bg-[#282a2c] hover:bg-[#333537] text-white'
+                                  : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#1f1f1f]'
+                              }`}
+                            >
+                              {isEn ? 'Load into Form' : 'Forma Yükle'}
+                            </button>
+                            {onStartNewChatWithCharacter && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onStartNewChatWithCharacter(item.profile);
+                                  onClose();
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1 py-1 px-2 rounded-lg text-[10.5px] font-semibold bg-[#9b72cb] hover:bg-[#8659b8] text-white transition-colors cursor-pointer"
+                              >
+                                <MessageSquarePlus className="w-3 h-3" />
+                                <span>{isEn ? 'New Chat' : 'Yeni Sohbet'}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Presets Gallery Accordion */}
               {showPresetsView && (

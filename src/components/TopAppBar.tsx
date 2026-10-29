@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Menu,
-  ChevronDown,
   Check,
   X,
   Pencil,
   Settings,
   Sliders,
   LogOut,
-  LogIn
+  LogIn,
+  Search
 } from 'lucide-react';
 import { User } from '../firebase.ts';
 
@@ -22,9 +22,9 @@ interface TopAppBarProps {
   directiveBadgeText?: string;
   activeConversationTitle?: string;
   onRenameActiveChat?: (newTitle: string) => void;
-  currentModel: string;
-  onSelectModel: (modelId: string) => void;
-  availableModels: { id: string; name: string; label: string }[];
+  inChatSearch?: string;
+  onChangeInChatSearch?: (query: string) => void;
+  hasMessagesInActiveChat?: boolean;
   uiLanguage?: 'tr' | 'en';
   user?: User | null;
   isAuthLoading?: boolean;
@@ -43,9 +43,9 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   directiveBadgeText,
   activeConversationTitle,
   onRenameActiveChat,
-  currentModel,
-  onSelectModel,
-  availableModels,
+  inChatSearch = '',
+  onChangeInChatSearch,
+  hasMessagesInActiveChat = false,
   uiLanguage = 'en',
   user,
   isAuthLoading = false,
@@ -53,13 +53,14 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   onSignOutGoogle
 }) => {
   const isEn = uiLanguage === 'en';
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitleInput, setNewTitleInput] = useState(activeConversationTitle || '');
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+
   const accountRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setNewTitleInput(activeConversationTitle || '');
@@ -74,10 +75,20 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   }, [isEditingTitle]);
 
   useEffect(() => {
+    if (isSearchExpanded) {
+      searchInputRef.current?.focus();
+    }
+  }, [isSearchExpanded]);
+
+  useEffect(() => {
+    if (!hasMessagesInActiveChat && isSearchExpanded) {
+      setIsSearchExpanded(false);
+      onChangeInChatSearch?.('');
+    }
+  }, [hasMessagesInActiveChat, isSearchExpanded, onChangeInChatSearch]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsModelDropdownOpen(false);
-      }
       if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
         setIsAccountMenuOpen(false);
       }
@@ -103,12 +114,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
     }
   };
 
-  const activeModelObj = availableModels.find((m) => m.id === currentModel) || {
-    id: currentModel,
-    name: currentModel,
-    label: currentModel
-  };
-
   const localizedActiveTitle =
     activeConversationTitle === 'Yeni Sohbet' && isEn
       ? 'New Chat'
@@ -124,7 +129,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           : 'bg-[#ffffff]/95 border-[#e3e8ef] text-[#1f1f1f]'
       }`}
     >
-      {/* Top App Bar Left: Drawer Menu & Model Selector */}
+      {/* Top App Bar Left: Drawer Menu, Brand & In-Chat Search */}
       <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
         <button
           onClick={onOpenDrawer}
@@ -146,73 +151,69 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           mAI
         </span>
 
-        {/* Model Selector Dropdown Pill */}
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-            className={`flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-medium transition-transform duration-75 active:scale-95 ${
-              isDarkMode
-                ? 'bg-[#1e1f20] hover:bg-[#282a2c] text-[#e3e3e3] border border-[#2f3032]'
-                : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#1f1f1f] border border-[#dfe3e8]'
-            }`}
-            title={`${isEn ? 'Active Model' : 'Aktif Model'}: ${activeModelObj.name}`}
-          >
-            <span className="truncate max-w-[115px] sm:max-w-[160px]">{activeModelObj.label}</span>
-            <ChevronDown
-              className={`w-3.5 h-3.5 opacity-60 transition-transform duration-150 ${
-                isModelDropdownOpen ? 'rotate-180' : ''
-              }`}
-            />
-          </button>
-
-          {isModelDropdownOpen && (
-            <div
-              className={`absolute top-full left-0 mt-1.5 w-60 rounded-2xl shadow-xl border py-1.5 z-50 animate-scale-in origin-top-left ${
-                isDarkMode
-                  ? 'bg-[#1e1f20] border-[#2f3032] text-[#e3e3e3]'
-                  : 'bg-white border-[#e3e8ef] text-[#1f1f1f]'
-              }`}
-            >
-              <div className="px-3 py-1 text-[11px] font-medium opacity-50 uppercase tracking-wider">
-                {isEn ? 'Model Selection' : 'Model Seçimi'}
+        {/* In-Chat Search */}
+        {onChangeInChatSearch && (
+          <div className="flex items-center">
+            {isSearchExpanded || inChatSearch.trim() ? (
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs transition-all duration-200 animate-scale-in ${
+                  isDarkMode
+                    ? 'bg-[#1e1f20] border-[#4285f4]/60 text-[#e3e3e3]'
+                    : 'bg-[#f0f4f9] border-[#4285f4]/60 text-[#1f1f1f]'
+                }`}
+              >
+                <Search className="w-3.5 h-3.5 text-[#4285f4] shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={inChatSearch}
+                  onChange={(e) => onChangeInChatSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      onChangeInChatSearch('');
+                      setIsSearchExpanded(false);
+                    }
+                  }}
+                  placeholder={isEn ? 'Search in chat...' : 'Sohbette ara...'}
+                  className="bg-transparent outline-none text-xs w-28 sm:w-44 md:w-52"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChangeInChatSearch('');
+                    setIsSearchExpanded(false);
+                  }}
+                  className="p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+                  title={isEn ? 'Close search' : 'Aramayı kapat'}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-              {availableModels.map((m) => {
-                const isSelected = m.id === currentModel;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => {
-                      onSelectModel(m.id);
-                      setIsModelDropdownOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors text-left ${
-                      isSelected
-                        ? isDarkMode
-                          ? 'bg-[#282a2c] font-medium text-white'
-                          : 'bg-[#e9eef6] font-medium text-[#1a73e8]'
-                        : isDarkMode
-                          ? 'hover:bg-[#282a2c]/60'
-                          : 'hover:bg-[#f0f4f9]'
-                    }`}
-                  >
-                    <div className="truncate pr-2">
-                      <div className="font-medium">{m.label}</div>
-                      <div className="text-[10px] opacity-60 truncate">{m.id}</div>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 shrink-0 text-[#4285f4]" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsSearchExpanded(true)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 active:scale-95 cursor-pointer ${
+                  isDarkMode
+                    ? 'bg-[#1e1f20] hover:bg-[#282a2c] text-[#c4c7c5] border border-[#2f3032]'
+                    : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#444746] border border-[#dfe3e8]'
+                }`}
+                title={isEn ? 'Search inside this conversation' : 'Bu sohbette ara'}
+              >
+                <Search className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden md:inline">{isEn ? 'Search' : 'Ara'}</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Top App Bar Right Actions: Chat Title, Quick Directive Edit, Google Account, & Settings */}
+      {/* Top App Bar Right Actions: Chat Title, Directive, Google Account Icon, & Settings Icon */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         {localizedActiveTitle &&
+          !isSearchExpanded &&
           (isEditingTitle ? (
-            <div className="hidden md:flex items-center gap-1 bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full">
+            <div className="hidden lg:flex items-center gap-1 bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full">
               <input
                 ref={titleInputRef}
                 type="text"
@@ -243,14 +244,14 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           ) : (
             <div
               onClick={() => setIsEditingTitle(true)}
-              className={`hidden md:flex group items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-normal cursor-pointer transition-transform active:scale-95 duration-75 ${
+              className={`hidden lg:flex group items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-normal cursor-pointer transition-transform active:scale-95 duration-75 ${
                 isDarkMode
                   ? 'bg-[#1e1f20] hover:bg-[#282a2c] text-[#9fa1a0] hover:text-white'
                   : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#5e6266] hover:text-black'
               }`}
               title={isEn ? 'Click to rename chat' : 'Sohbete isim vermek için tıklayın'}
             >
-              <span className="truncate max-w-[130px]">{localizedActiveTitle}</span>
+              <span className="truncate max-w-[125px]">{localizedActiveTitle}</span>
               <Pencil className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
             </div>
           ))}
@@ -269,7 +270,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           title={isEn ? 'Edit Directive & Roleplay Persona' : 'Direktif ve Rol Yapma Karakterini Düzenle'}
         >
           <Sliders className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate max-w-[95px] sm:max-w-[140px]">
+          <span className="truncate max-w-[85px] sm:max-w-[130px]">
             {hasDirective && directiveBadgeText
               ? directiveBadgeText
               : isEn
@@ -278,7 +279,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           </span>
         </button>
 
-        {/* Google Sign-In / User Profile Pill */}
+        {/* Google Sign-In / User Profile Icon Button (Icon Only) */}
         {!isAuthLoading && (
           <div className="relative" ref={accountRef}>
             {user ? (
@@ -286,12 +287,13 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
-                  className={`flex items-center p-1 rounded-full text-xs font-medium border transition-all active:scale-95 cursor-pointer ${
+                  className={`flex items-center justify-center p-1 rounded-full text-xs font-medium border transition-all active:scale-95 cursor-pointer ${
                     isDarkMode
                       ? 'bg-[#1e1f20] hover:bg-[#282a2c] border-[#2f3032] text-[#e3e3e3]'
                       : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] border-[#dfe3e8] text-[#1f1f1f]'
                   }`}
                   title={user.email || (isEn ? 'Google Account' : 'Google Hesabı')}
+                  aria-label={isEn ? 'Google Account' : 'Google Hesabı'}
                 >
                   {user.photoURL ? (
                     <img
@@ -358,36 +360,33 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
               <button
                 type="button"
                 onClick={onSignInGoogle}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-medium bg-[#4285f4] hover:bg-[#1a73e8] text-white shadow-xs transition-transform active:scale-95 cursor-pointer"
+                className="flex items-center justify-center p-2 rounded-full bg-[#4285f4] hover:bg-[#1a73e8] text-white shadow-xs transition-transform active:scale-95 cursor-pointer"
                 title={isEn ? 'Sign in with Google' : 'Google ile giriş yapın'}
+                aria-label={isEn ? 'Sign in with Google' : 'Google ile giriş yapın'}
               >
-                <LogIn className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">
-                  {isEn ? 'Google Sign In' : 'Google ile Giriş'}
-                </span>
-                <span className="sm:hidden">{isEn ? 'Sign In' : 'Giriş'}</span>
+                <LogIn className="w-4 h-4 shrink-0" />
               </button>
             )}
           </div>
         )}
 
-        {/* Settings Button */}
+        {/* Settings Icon Button (Icon Only) */}
         <button
           onClick={onOpenSettings}
-          className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-medium transition-transform duration-75 active:scale-95 ${
+          className={`flex items-center justify-center p-2 rounded-full transition-transform duration-75 active:scale-95 cursor-pointer ${
             !hasApiKey
               ? 'bg-[#ea4335] text-white shadow-xs animate-pulse'
               : isDarkMode
                 ? 'bg-[#1e1f20] hover:bg-[#282a2c] text-[#c4c7c5] border border-[#2f3032]'
                 : 'bg-[#f0f4f9] hover:bg-[#e1e7f0] text-[#444746] border border-[#dfe3e8]'
           }`}
-          aria-label={isEn ? 'Settings Menu' : 'Ayarlar Menüsü'}
+          aria-label={isEn ? 'Settings' : 'Ayarlar'}
           title={isEn ? 'Settings' : 'Ayarlar'}
         >
-          <Settings className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{isEn ? 'Settings' : 'Ayarlar'}</span>
+          <Settings className="w-4 h-4" />
         </button>
       </div>
     </header>
   );
 };
+

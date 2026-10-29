@@ -880,14 +880,16 @@ export function buildCombinedDirective(
   const trimmed = userDirective.trim();
 
   if (mode === 'other') {
-    if (!trimmed) return '';
+    if (!trimmed) {
+      return '';
+    }
     return `[CUSTOM SYSTEM DIRECTIVE]
 The following instructions are directly commanded by the user and hold highest priority:
 "${trimmed}"
 
 EXECUTION RULES:
-1. Stay 100% faithful to the tone, rules, boundaries, and persona of the directive above in every message.
-2. Never revert to default assistant behavior unless explicitly instructed by the user.`;
+1. Stay 100% faithful to the tone, rules, and instructions of the directive above in every message.
+2. Do NOT roleplay or write physical actions inside *asterisks* unless the custom instructions above explicitly ask for roleplay.`;
   }
 
   if (mode === 'roleplay') {
@@ -928,8 +930,10 @@ EXECUTION RULES:
       characterSpecs = trimmed;
     }
 
-    // If no roleplay character or directive has been entered yet, return empty string so the AI stays in normal assistant mode
-    if (!characterSpecs) return '';
+    // If no roleplay character or directive has been entered yet, return empty string so AI acts as normal assistant
+    if (!characterSpecs) {
+      return '';
+    }
 
     return `${base}
 
@@ -947,9 +951,9 @@ You ARE the character described above!
 
   if (mode === 'assistant') {
     const categoryInfo = ASSISTANT_FRAMEWORKS[assistantCategory] || ASSISTANT_FRAMEWORKS.general;
-    const base = categoryInfo.frameworkPrompt;
+    const base = `[EXPERT ASSISTANT ENGINE DIRECTIVE]\n${categoryInfo.frameworkPrompt}`;
     if (!trimmed) {
-      return `${base}\n\n[LANGUAGE RULE]: Always respond in the exact language (English or Turkish) that the user writes their message in.`;
+      return `${base}\n\n[LANGUAGE & NON-ROLEPLAY RULE]: Always respond in the exact language (English or Turkish) that the user writes their message in. Answer directly as an expert assistant without roleplaying or using *action asterisks*.`;
     }
     return `${base}
 
@@ -957,7 +961,7 @@ You ARE the character described above!
 Topic / Domain / Custom Request:
 "${trimmed}"
 
-TASK & LANGUAGE INSTRUCTION: Adopting the expert methodology above, answer the user's questions and messages directly, clearly, and expertly in the exact language (English or Turkish) that the user writes their message in.`;
+TASK & LANGUAGE INSTRUCTION: Adopting the expert methodology above, answer the user's questions and messages directly, clearly, and expertly in the exact language (English or Turkish) that the user writes their message in. Do NOT roleplay.`;
   }
 
   return trimmed;
